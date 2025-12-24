@@ -1,106 +1,69 @@
-# app.py
 import streamlit as st
 import pandas as pd
-import pickle
 import os
+import pickle
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
 
+# --- Page config ---
 st.set_page_config(page_title="Loan Approval Predictor", page_icon="💰", layout="wide")
-st.title("Loan Approval Prediction 💰")
-st.write("Enter applicant's details to predict loan approval.")
 
-# -----------------------
-# Load dataset (optional)
-# -----------------------
-DATA_PATH = "data/loan_approval_dataset.csv"
-if os.path.exists(DATA_PATH):
-    df = pd.read_csv(DATA_PATH)
-    st.write("Sample Dataset:")
-    st.dataframe(df.head())
+# --- Load dataset ---
+data_path = "data/loan_approval_dataset.csv"
+
+if not os.path.exists(data_path):
+    st.error(f"Dataset not found at {data_path}. Please upload the CSV in the data/ folder.")
 else:
-    st.warning("Dataset not found in `data/` folder. Predictions will still work.")
+    df = pd.read_csv(data_path)
+    st.success("Dataset loaded successfully!")
+    st.dataframe(df.head())
 
-# -----------------------
-# Sidebar Inputs
-# -----------------------
-st.sidebar.header("Applicant Details")
-gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
-married = st.sidebar.selectbox("Married", ["Yes", "No"])
-dependents = st.sidebar.selectbox("Dependents", ["0", "1", "2", "3+"])
-education = st.sidebar.selectbox("Education", ["Graduate", "Not Graduate"])
-self_employed = st.sidebar.selectbox("Self Employed", ["Yes", "No"])
-applicant_income = st.sidebar.number_input("Applicant Income", min_value=0)
-coapplicant_income = st.sidebar.number_input("Coapplicant Income", min_value=0)
-loan_amount = st.sidebar.number_input("Loan Amount", min_value=0)
-loan_term = st.sidebar.number_input("Loan Term (in months)", min_value=0)
-credit_history = st.sidebar.selectbox("Credit History", [1.0, 0.0])
-property_area = st.sidebar.selectbox("Property Area", ["Urban", "Semiurban", "Rural"])
+# --- Prepare models folder ---
+model_folder = "models"
+os.makedirs(model_folder, exist_ok=True)
 
-input_data = {
-    "Gender": gender,
-    "Married": married,
-    "Dependents": dependents,
-    "Education": education,
-    "Self_Employed": self_employed,
-    "ApplicantIncome": applicant_income,
-    "CoapplicantIncome": coapplicant_income,
-    "LoanAmount": loan_amount,
-    "Loan_Amount_Term": loan_term,
-    "Credit_History": credit_history,
-    "Property_Area": property_area
+# --- Define models and file paths ---
+models_info = {
+    "Logistic Regression": {"model": LogisticRegression(max_iter=1000), "file": os.path.join(model_folder, "logistic_model.pkl")},
+    "Random Forest": {"model": RandomForestClassifier(), "file": os.path.join(model_folder, "random_forest_model.pkl")},
+    "SVC": {"model": SVC(probability=True), "file": os.path.join(model_folder, "svc_model.pkl")}
 }
 
-# -----------------------
-# Functions to load models
-# -----------------------
-def load_model(model_path):
-    if os.path.exists(model_path):
-        with open(model_path, "rb") as file:
-            return pickle.load(file)
+# --- Train models if not exist ---
+X = df.drop("Loan_Status", axis=1)
+y = df["Loan_Status"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+trained_models = {}
+
+for name, info in models_info.items():
+    model_file = info["file"]
+    
+    if os.path.exists(model_file):
+        # Load existing model
+        with open(model_file, "rb") as f:
+            trained_models[name] = pickle.load(f)
+        st.info(f"{name} model loaded from file.")
     else:
-        return None
+        # Train and save model
+        info["model"].fit(X_train, y_train)
+        with open(model_file, "wb") as f:
+            pickle.dump(info["model"], f)
+        trained_models[name] = info["model"]
+        st.success(f"{name} trained and saved to {model_file}.")
 
-def preprocess_input(input_dict, model_columns=None):
-    df = pd.DataFrame([input_dict])
-    df = pd.get_dummies(df)
-    if model_columns is not None:
-        for col in model_columns:
-            if col not in df.columns:
-                df[col] = 0
-        df = df[model_columns]
-    return df
+# --- Prediction UI ---
+st.header("Make a Prediction")
+input_data = {}
+for col in X.columns:
+    value = st.text_input(f"Enter value for {col}", "")
+    input_data[col] = [float(value) if value else 0]
 
-# -----------------------
-# Load models
-# -----------------------
-model_paths = {
-    "Logistic Regression": "models/logistic_model.pkl",
-    "Random Forest": "models/random_forest_model.pkl",
-    "SVC": "models/svc_model.pkl"
-}
+input_df = pd.DataFrame(input_data)
 
-loaded_models = {}
-model_columns = {}
-
-for name, path in model_paths.items():
-    model = load_model(path)
-    if model:
-        loaded_models[name] = model
-        if hasattr(model, 'columns'):
-            model_columns[name] = model.columns
-    else:
-        st.warning(f"{name} model not found at `{path}`. This model will be skipped.")
-
-# -----------------------
-# Prediction
-# -----------------------
-if st.button("Predict Loan Approval"):
-    if not loaded_models:
-        st.error("No models available. Please upload pickle files in `models/` folder.")
-    else:
-        for name, model in loaded_models.items():
-            cols = model_columns.get(name)
-            processed_input = preprocess_input(input_data, model_columns=cols)
-            prediction = model.predict(processed_input)[0]
-            result = "Approved ✅" if prediction == 1 else "Rejected ❌"
-            st.write(f"{name}: {result}")
+for name, model in trained_models.items():
+    prediction = model.predict(input_df)[0]
+    st.write(f"**{name} Prediction:** {prediction}")
 
