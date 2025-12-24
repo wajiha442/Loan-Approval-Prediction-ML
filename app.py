@@ -1,4 +1,4 @@
- import streamlit as st
+import streamlit as st
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
@@ -71,3 +71,4 @@ if st.button("Predict"):
     prediction = model.predict(input_df)
     res = "Approved ✅" if prediction[0] == 1 else "Rejected ❌"
     st.header(f"Result: {res}")
+
