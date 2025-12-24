@@ -1,50 +1,73 @@
 import streamlit as st
 import pandas as pd
-import pickle
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 
-# CSV load karne ke baad column names ko strip karo
-df = pd.read_csv("data/loan_approval_dataset.csv")
-df.columns = df.columns.str.strip()  # extra spaces remove karne ke liye
+# Page configuration
+st.set_page_config(page_title="Loan Approval Prediction", page_icon="💰", layout="wide")
 
-# Debug: columns check karo
+st.title("Loan Approval Prediction App")
+
+# Dataset path
+dataset_path = "data/loan_approval_dataset.csv"
+
+# Check if file exists
+import os
+if not os.path.exists(dataset_path):
+    st.error(f"Dataset not found! Please upload 'loan_approval_dataset.csv' inside the 'data/' folder.")
+    st.stop()  # Stop app if dataset missing
+
+# Load dataset
+df = pd.read_csv(dataset_path)
+
+# Remove extra spaces from column names
+df.columns = df.columns.str.strip()
+
+# Debug: show columns
 st.write("Columns in dataset:", df.columns)
 
-def get_trained_models(df):
-    # Ensure 'Loan_Status' column exists
-    if "Loan_Status" not in df.columns:
-        st.error("Error: 'Loan_Status' column not found in dataset!")
-        return None
+# Check if 'Loan_Status' exists
+if "Loan_Status" not in df.columns:
+    st.error("Error: 'Loan_Status' column not found in dataset!")
+    st.stop()
 
-    X = df.drop("Loan_Status", axis=1)
-    y = df["Loan_Status"]
+# Separate features and target
+X = df.drop("Loan_Status", axis=1)
+y = df["Loan_Status"]
 
-    # Train-test split
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # Logistic Regression
+# Train models
+with st.spinner("Training models..."):
     logistic_model = LogisticRegression(max_iter=1000)
     logistic_model.fit(X_train, y_train)
 
-    # Random Forest
     rf_model = RandomForestClassifier()
     rf_model.fit(X_train, y_train)
 
-    # Support Vector Classifier
     svc_model = SVC(probability=True)
     svc_model.fit(X_train, y_train)
 
-    return {
-        "logistic": logistic_model,
-        "random_forest": rf_model,
-        "svc": svc_model
-    }
+st.success("✅ Models trained successfully!")
 
-# Call the function safely
-trained_models = get_trained_models(df)
-if trained_models:
-    st.success("Models trained successfully!")
+# Optional: show first 5 rows of dataset
+st.subheader("Dataset Preview")
+st.dataframe(df.head())
+
+# Example: prediction form
+st.subheader("Make a Prediction")
+user_input = {}
+for col in X.columns:
+    user_input[col] = st.text_input(f"Enter {col}:")
+
+if st.button("Predict"):
+    try:
+        input_df = pd.DataFrame([user_input])
+        prediction = logistic_model.predict(input_df)
+        st.write(f"Predicted Loan Status (Logistic Regression): {prediction[0]}")
+    except Exception as e:
+        st.error(f"Error in prediction: {e}")
 
