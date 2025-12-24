@@ -7,61 +7,92 @@ import os
 st.set_page_config(page_title="Loan Approval Prediction", page_icon="💰")
 st.title("💰 Loan Approval Prediction App")
 
+# 1. Path Setup
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 dataset_path = os.path.join(BASE_DIR, "loan_approval_dataset.csv")
 
 if not os.path.exists(dataset_path):
-    st.error(f"❌ Dataset file nahi mili! File ka naam check karein.")
+    st.error(f"❌ Dataset file ('loan_approval_dataset.csv') nahi mili!")
     st.stop()
 
-# Load Data
-df = pd.read_csv(dataset_path)
+# 2. Load Data
+try:
+    df = pd.read_csv(dataset_path)
+    # Sab se pehle column names se extra spaces khatam karein
+    df.columns = df.columns.str.strip()
+    
+    # Preview for debugging
+    with st.expander("Dataset Preview"):
+        st.write(df.head())
+        st.write("Total Columns:", list(df.columns))
 
-# --- DEBUGGING SECTION ---
-# Column names ko clean karna (Spaces khatam karna)
-df.columns = df.columns.str.strip()
+except Exception as e:
+    st.error(f"File load karne mein masla: {e}")
+    st.stop()
 
-# Screen par columns dikhana taake aap check kar sakein
-st.write("### Aapke Dataset ke Columns:", list(df.columns))
-
-# Automatic Target Column Finder
-# Hum dhoond rahe hain aisa column jis mein 'status' ya 'loan_status' likha ho
+# 3. Target Column dhoondein (Loan Status)
+# Hum check kar rahe hain ke 'loan_status' (choti ya bari abc mein) kahan hai
 target_col = None
-for col in df.columns:
-    if 'status' in col.lower():
-        target_col = col
+for c in df.columns:
+    if 'status' in c.lower():
+        target_col = c
         break
 
-if target_col:
-    st.success(f"✅ Target column mil gaya: '{target_col}'")
-else:
-    st.error("❌ Error: 'loan_status' jaisa koi column nahi mila. Upar list mein se sahi naam dekh kar code mein likhein.")
+if not target_col:
+    st.error("❌ 'Loan Status' wala column nahi mila. Apni CSV file check karein.")
     st.stop()
 
-# --- PREPROCESSING ---
-# Status ko numbers mein badalna (Approved = 1, Rejected = 0)
+# 4. Data Preprocessing
+# Target ko binary (0/1) mein convert karein
 df[target_col] = df[target_col].astype(str).str.strip().str.lower()
 df[target_col] = df[target_col].apply(lambda x: 1 if 'approved' in x else 0)
 
-# Baki columns (Features) - Sirf numerical columns le rahe hain training ke liye (Asaan rakhne ke liye)
-X = df.drop(target_col, axis=1)
-X = pd.get_dummies(X, drop_first=True) # Text columns ko numbers mein badal dega
+# Features (X) aur Target (y)
+X = df.drop(columns=[target_col])
 y = df[target_col]
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# Error Fix: Ensure X is not empty
+if X.empty:
+    st.error("X (Features) khali hain! Dataset mein sirf ek hi column hai shayad.")
+    st.stop()
 
-# Model Training
-model = LogisticRegression(max_iter=1000)
-model.fit(X_train, y_train)
+# Text columns ko numbers mein badalna
+X = pd.get_dummies(X)
 
+# 5. Model Training
+try:
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    model = LogisticRegression(max_iter=1000)
+    model.fit(X_train, y_train)
+    st.success("✅ Model Train ho gaya!")
+except Exception as e:
+    st.error(f"Training mein error: {e}")
+    st.stop()
+
+# 6. User Prediction Interface
 st.write("---")
-st.subheader("Make a Prediction")
-user_input = {}
-for col in X.columns:
-    user_input[col] = st.number_input(f"Enter {col}", value=0)
+st.subheader("📝 Enter Details for Prediction")
 
-if st.button("Predict"):
-    input_df = pd.DataFrame([user_input])
-    prediction = model.predict(input_df)
+user_input = {}
+# Columns ko loops mein dikhayenge input ke liye
+# Pehle 5 columns dikhate hain taake screen bhar na jaye
+cols_to_show = X.columns[:10] 
+
+for col in cols_to_show:
+    user_input[col] = st.number_input(f"Enter {col}", value=0.0)
+
+if st.button("Predict Loan Status"):
+    # Baqi missing columns ko 0 se bhar dena agar koi reh gaya ho
+    full_input = pd.DataFrame(columns=X.columns)
+    full_input.loc[0] = 0 # Default 0
+    for k, v in user_input.items():
+        full_input[k] = v
+        
+    prediction = model.predict(full_input)
     res = "Approved ✅" if prediction[0] == 1 else "Rejected ❌"
-    st.header(f"Result: {res}")
+    
+    if prediction[0] == 1:
+        st.balloons()
+        st.success(f"Loan Status: **{res}**")
+    else:
+        st.error(f"Loan Status: **{res}**")
