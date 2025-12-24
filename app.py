@@ -5,37 +5,30 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 import os
-import urllib.request
 
+# -----------------------------
 # Page configuration
+# -----------------------------
 st.set_page_config(page_title="Loan Approval Prediction", page_icon="💰", layout="wide")
 st.title("Loan Approval Prediction App")
 
-# BASE_DIR is the folder where app.py is located
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# -----------------------------
+# Paths
+# -----------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # folder where app.py is
+DATA_FOLDER = os.path.join(BASE_DIR, "data")
+dataset_path = os.path.join(DATA_FOLDER, "loan_approval_dataset.csv")
 
-# Dataset path
-dataset_folder = os.path.join(BASE_DIR, "data")
-dataset_path = os.path.join(dataset_folder, "loan_approval_dataset.csv")
-
-# Create data folder if it doesn't exist
-if not os.path.exists(dataset_folder):
-    os.makedirs(dataset_folder)
-
-# URL of your dataset (replace this with your dataset's raw GitHub URL or Kaggle URL)
-dataset_url = "https://raw.githubusercontent.com/yourusername/yourrepo/main/data/loan_approval_dataset.csv"
-
-# Download dataset if it doesn't exist
+# -----------------------------
+# Check dataset existence
+# -----------------------------
 if not os.path.exists(dataset_path):
-    st.warning("Dataset not found locally. Downloading dataset...")
-    try:
-        urllib.request.urlretrieve(dataset_url, dataset_path)
-        st.success("Dataset downloaded successfully!")
-    except Exception as e:
-        st.error(f"Failed to download dataset: {e}")
-        st.stop()
+    st.error("Dataset not found! Please upload 'loan_approval_dataset.csv' inside the 'data/' folder.")
+    st.stop()
 
+# -----------------------------
 # Load dataset
+# -----------------------------
 df = pd.read_csv(dataset_path)
 
 # Remove extra spaces from column names
@@ -44,19 +37,23 @@ df.columns = df.columns.str.strip()
 # Debug: show columns
 st.write("Columns in dataset:", df.columns)
 
-# Check if 'Loan_Status' exists
+# Ensure 'Loan_Status' exists
 if "Loan_Status" not in df.columns:
     st.error("Error: 'Loan_Status' column not found in dataset!")
     st.stop()
 
-# Separate features and target
+# -----------------------------
+# Prepare features and target
+# -----------------------------
 X = df.drop("Loan_Status", axis=1)
 y = df["Loan_Status"]
 
 # Train-test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
+# -----------------------------
 # Train models
+# -----------------------------
 with st.spinner("Training models..."):
     logistic_model = LogisticRegression(max_iter=1000)
     logistic_model.fit(X_train, y_train)
@@ -69,11 +66,15 @@ with st.spinner("Training models..."):
 
 st.success("✅ Models trained successfully!")
 
-# Optional: show first 5 rows of dataset
+# -----------------------------
+# Dataset preview
+# -----------------------------
 st.subheader("Dataset Preview")
 st.dataframe(df.head())
 
-# Example: prediction form
+# -----------------------------
+# Prediction form
+# -----------------------------
 st.subheader("Make a Prediction")
 user_input = {}
 for col in X.columns:
