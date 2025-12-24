@@ -2,115 +2,66 @@ import streamlit as st
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
 import os
 
-# -----------------------------
-# 1. Page Configuration
-# -----------------------------
-st.set_page_config(page_title="Loan Approval Prediction", page_icon="💰", layout="wide")
+st.set_page_config(page_title="Loan Approval Prediction", page_icon="💰")
 st.title("💰 Loan Approval Prediction App")
-st.markdown("This app predicts whether a loan will be approved based on the provided dataset.")
 
-# -----------------------------
-# 2. Paths (Directly using GitHub root folder)
-# -----------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Hum 'data' folder hata rahe hain kyunke aapne file direct upload ki hai
 dataset_path = os.path.join(BASE_DIR, "loan_approval_dataset.csv")
 
-# -----------------------------
-# 3. Load and Clean Dataset
-# -----------------------------
 if not os.path.exists(dataset_path):
-    st.error(f"❌ Dataset not found! Make sure 'loan_approval_dataset.csv' is in your GitHub repository.")
-    st.info(f"Looking at path: {dataset_path}")
+    st.error(f"❌ Dataset file nahi mili! File ka naam check karein.")
     st.stop()
 
-@st.cache_data # Cache taake baar baar load na ho
-def load_data():
-    data = pd.read_csv(dataset_path)
-    # Column names se spaces khatam karein aur lowercase karein
-    data.columns = data.columns.str.strip().str.lower()
-    return data
+# Load Data
+df = pd.read_csv(dataset_path)
 
-df = load_data()
+# --- DEBUGGING SECTION ---
+# Column names ko clean karna (Spaces khatam karna)
+df.columns = df.columns.str.strip()
 
-# -----------------------------
-# 4. Handle Target Column
-# -----------------------------
-# Kaggle ke dataset mein aksar 'loan_status' hota hai
-target_col = 'loan_status'
+# Screen par columns dikhana taake aap check kar sakein
+st.write("### Aapke Dataset ke Columns:", list(df.columns))
 
-if target_col not in df.columns:
-    st.error(f"❌ Error: Column '{target_col}' not found!")
-    st.write("Available columns are:", list(df.columns))
+# Automatic Target Column Finder
+# Hum dhoond rahe hain aisa column jis mein 'status' ya 'loan_status' likha ho
+target_col = None
+for col in df.columns:
+    if 'status' in col.lower():
+        target_col = col
+        break
+
+if target_col:
+    st.success(f"✅ Target column mil gaya: '{target_col}'")
+else:
+    st.error("❌ Error: 'loan_status' jaisa koi column nahi mila. Upar list mein se sahi naam dekh kar code mein likhein.")
     st.stop()
 
-# -----------------------------
-# 5. Data Preprocessing
-# -----------------------------
-# Text columns (Categorical) ko numbers mein convert karna zaroori hai
-# 'loan_status' ko 1 aur 0 mein convert karein
-df[target_col] = df[target_col].apply(lambda x: 1 if str(x).strip().lower() == 'approved' else 0)
+# --- PREPROCESSING ---
+# Status ko numbers mein badalna (Approved = 1, Rejected = 0)
+df[target_col] = df[target_col].astype(str).str.strip().str.lower()
+df[target_col] = df[target_col].apply(lambda x: 1 if 'approved' in x else 0)
 
-# Features (X) aur Target (y)
+# Baki columns (Features) - Sirf numerical columns le rahe hain training ke liye (Asaan rakhne ke liye)
 X = df.drop(target_col, axis=1)
+X = pd.get_dummies(X, drop_first=True) # Text columns ko numbers mein badal dega
 y = df[target_col]
 
-# Agar koi aur text columns hain (jaise Education), unhein numbers mein badlein
-X = pd.get_dummies(X, drop_first=True)
-
-# Train-test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# -----------------------------
-# 6. Train Models
-# -----------------------------
-@st.cache_resource # Model training ko cache karein
-def train_models(X_train, y_train):
-    lr = LogisticRegression(max_iter=1000)
-    lr.fit(X_train, y_train)
-    
-    rf = RandomForestClassifier()
-    rf.fit(X_train, y_train)
-    
-    return lr, rf
+# Model Training
+model = LogisticRegression(max_iter=1000)
+model.fit(X_train, y_train)
 
-with st.spinner("Training models, please wait..."):
-    logistic_model, rf_model = train_models(X_train, y_train)
+st.write("---")
+st.subheader("Make a Prediction")
+user_input = {}
+for col in X.columns:
+    user_input[col] = st.number_input(f"Enter {col}", value=0)
 
-st.success("✅ Models trained successfully!")
-
-# -----------------------------
-# 7. Sidebar for User Input
-# -----------------------------
-st.sidebar.header("User Input Features")
-def get_user_input():
-    user_data = {}
-    for col in X.columns:
-        # Har column ke liye input box
-        val = st.sidebar.number_input(f"Enter {col}", value=0.0)
-        user_data[col] = val
-    return pd.DataFrame([user_data])
-
-input_df = get_user_input()
-
-# -----------------------------
-# 8. Prediction Logic
-# -----------------------------
-st.subheader("Prediction Result")
-if st.button("Predict Loan Status"):
-    prediction = logistic_model.predict(input_df)
-    result = "Approved ✅" if prediction[0] == 1 else "Rejected ❌"
-    
-    if prediction[0] == 1:
-        st.balloons()
-        st.success(f"The predicted status is: **{result}**")
-    else:
-        st.error(f"The predicted status is: **{result}**")
-
-# Show Data Preview
-with st.expander("View Dataset Preview"):
-    st.dataframe(df.head())
+if st.button("Predict"):
+    input_df = pd.DataFrame([user_input])
+    prediction = model.predict(input_df)
+    res = "Approved ✅" if prediction[0] == 1 else "Rejected ❌"
+    st.header(f"Result: {res}")
