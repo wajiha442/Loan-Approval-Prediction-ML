@@ -1,7 +1,8 @@
+ # app.py
 import streamlit as st
 import pandas as pd
+import pickle
 import os
-from utils.helper import load_model, preprocess_input
 
 st.set_page_config(page_title="Loan Approval Predictor", page_icon="💰", layout="wide")
 st.title("Loan Approval Prediction 💰")
@@ -44,6 +45,26 @@ input_data = {
     "Property_Area": property_area
 }
 
+# ----------------------
+# Model loading function
+# ----------------------
+def load_model(model_path):
+    if os.path.exists(model_path):
+        with open(model_path, "rb") as file:
+            return pickle.load(file)
+    else:
+        return None
+
+def preprocess_input(input_dict, model_columns=None):
+    df = pd.DataFrame([input_dict])
+    df = pd.get_dummies(df)
+    if model_columns is not None:
+        for col in model_columns:
+            if col not in df.columns:
+                df[col] = 0
+        df = df[model_columns]
+    return df
+
 # Models
 model_paths = {
     "Logistic Regression": "models/logistic_model.pkl",
@@ -52,20 +73,19 @@ model_paths = {
 }
 
 loaded_models = {}
-model_columns = {}  # To store expected columns for each model
+model_columns = {}
 
-# Load models safely
 for name, path in model_paths.items():
     model = load_model(path)
     if model:
         loaded_models[name] = model
-        # Capture columns if model has it (for dummy preprocessing)
+        # If model has 'columns' attribute saved
         if hasattr(model, 'columns'):
             model_columns[name] = model.columns
     else:
         st.warning(f"{name} model not found at `{path}`. This model will be skipped.")
 
-# Prediction
+# Prediction button
 if st.button("Predict Loan Approval"):
     if not loaded_models:
         st.error("No models available. Please upload pickle files in `models/` folder.")
