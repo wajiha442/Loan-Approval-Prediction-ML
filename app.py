@@ -4,17 +4,19 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
+import os
 
 # Page configuration
 st.set_page_config(page_title="Loan Approval Prediction", page_icon="💰", layout="wide")
-
 st.title("Loan Approval Prediction App")
 
-# Dataset path
-dataset_path = "data/loan_approval_dataset.csv"
+# BASE_DIR is the folder where app.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Dataset path (absolute)
+dataset_path = os.path.join(BASE_DIR, "data", "loan_approval_dataset.csv")
 
 # Check if file exists
-import os
 if not os.path.exists(dataset_path):
     st.error(f"Dataset not found! Please upload 'loan_approval_dataset.csv' inside the 'data/' folder.")
     st.stop()  # Stop app if dataset missing
