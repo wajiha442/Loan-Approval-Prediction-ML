@@ -11,17 +11,24 @@ from sklearn.svm import SVC
 st.set_page_config(page_title="Loan Approval Predictor", page_icon="💰", layout="wide")
 
 # --- Paths ---
-data_path = "data/loan_approval_dataset.csv"  # Tumhara dataset path
+data_path = "data/loan_approval_dataset.csv"
 model_folder = "models"
 os.makedirs(model_folder, exist_ok=True)
 
-# --- Load dataset safely ---
-if not os.path.exists(data_path):
-    st.warning(f"Dataset not found at {data_path}. Please upload the CSV in the data/ folder.")
-    df = None
-else:
+# --- Load dataset safely or upload ---
+df = None
+if os.path.exists(data_path):
     df = pd.read_csv(data_path)
-    st.success("Dataset loaded successfully!")
+    st.success("Dataset loaded from data/ folder!")
+else:
+    st.warning(f"Dataset not found at {data_path}. You can upload it below.")
+    uploaded_file = st.file_uploader("Upload CSV dataset", type="csv")
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
+        st.success("Dataset uploaded successfully!")
+
+# --- Show dataset preview ---
+if df is not None:
     st.dataframe(df.head())
 
 # --- Function to train/load models ---
@@ -35,7 +42,7 @@ def get_trained_models(df):
     X = df.drop("Loan_Status", axis=1)
     y = df["Loan_Status"]
     
-    # Encode categorical columns if any
+    # Encode categorical columns
     for col in X.columns:
         if X[col].dtype == 'object':
             X[col] = X[col].astype('category').cat.codes
@@ -78,7 +85,7 @@ if df is not None:
 
     input_df = pd.DataFrame(input_data)
 
-    # Choose model for prediction
+    # Model selection
     model_choice = st.selectbox("Select Model", list(trained_models.keys()))
 
     if st.button("Predict"):
