@@ -1,98 +1,50 @@
 import streamlit as st
 import pandas as pd
-import os
 import pickle
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 
-# --- Page config ---
-st.set_page_config(page_title="Loan Approval Predictor", page_icon="💰", layout="wide")
+# CSV load karne ke baad column names ko strip karo
+df = pd.read_csv("data/loan_approval_dataset.csv")
+df.columns = df.columns.str.strip()  # extra spaces remove karne ke liye
 
-# --- Paths ---
-data_path = "data/loan_approval_dataset.csv"
-model_folder = "models"
-os.makedirs(model_folder, exist_ok=True)
+# Debug: columns check karo
+st.write("Columns in dataset:", df.columns)
 
-# --- Load dataset safely or upload ---
-df = None
-if os.path.exists(data_path):
-    df = pd.read_csv(data_path)
-    st.success("Dataset loaded from data/ folder!")
-else:
-    st.warning(f"Dataset not found at {data_path}. You can upload it below.")
-    uploaded_file = st.file_uploader("Upload CSV dataset", type="csv")
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        st.success("Dataset uploaded successfully!")
-
-# --- Show dataset preview ---
-if df is not None:
-    st.dataframe(df.head())
-
-# --- Function to train/load models ---
 def get_trained_models(df):
-    models_info = {
-        "Logistic Regression": {"model": LogisticRegression(max_iter=1000), "file": os.path.join(model_folder, "logistic_model.pkl")},
-        "Random Forest": {"model": RandomForestClassifier(), "file": os.path.join(model_folder, "random_forest_model.pkl")},
-        "SVC": {"model": SVC(probability=True), "file": os.path.join(model_folder, "svc_model.pkl")}
-    }
+    # Ensure 'Loan_Status' column exists
+    if "Loan_Status" not in df.columns:
+        st.error("Error: 'Loan_Status' column not found in dataset!")
+        return None
 
     X = df.drop("Loan_Status", axis=1)
     y = df["Loan_Status"]
-    
-    # Encode categorical columns
-    for col in X.columns:
-        if X[col].dtype == 'object':
-            X[col] = X[col].astype('category').cat.codes
 
+    # Train-test split
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    trained_models = {}
-    for name, info in models_info.items():
-        model_file = info["file"]
-        if os.path.exists(model_file):
-            with open(model_file, "rb") as f:
-                trained_models[name] = pickle.load(f)
-            st.info(f"{name} model loaded from file.")
-        else:
-            info["model"].fit(X_train, y_train)
-            with open(model_file, "wb") as f:
-                pickle.dump(info["model"], f)
-            trained_models[name] = info["model"]
-            st.success(f"{name} trained and saved to {model_file}.")
-    return trained_models
+    # Logistic Regression
+    logistic_model = LogisticRegression(max_iter=1000)
+    logistic_model.fit(X_train, y_train)
 
-# --- Only train/load models if dataset exists ---
-if df is not None:
-    trained_models = get_trained_models(df)
+    # Random Forest
+    rf_model = RandomForestClassifier()
+    rf_model.fit(X_train, y_train)
 
-    # --- Prediction UI ---
-    st.header("Make a Prediction")
-    input_data = {}
-    for col in df.drop("Loan_Status", axis=1).columns:
-        value = st.text_input(f"Enter value for {col}", "")
-        # Handle numeric or categorical inputs
-        if df[col].dtype in ['int64','float64']:
-            input_data[col] = [float(value) if value else 0]
-        else:
-            # Encode categorical input same as training
-            if value:
-                input_data[col] = [pd.Series(df[col]).astype('category').cat.categories.get_loc(value) if value in pd.Series(df[col]).astype('category').cat.categories else 0]
-            else:
-                input_data[col] = [0]
+    # Support Vector Classifier
+    svc_model = SVC(probability=True)
+    svc_model.fit(X_train, y_train)
 
-    input_df = pd.DataFrame(input_data)
+    return {
+        "logistic": logistic_model,
+        "random_forest": rf_model,
+        "svc": svc_model
+    }
 
-    # Model selection
-    model_choice = st.selectbox("Select Model", list(trained_models.keys()))
-
-    if st.button("Predict"):
-        prediction = trained_models[model_choice].predict(input_df)[0]
-        st.subheader("Prediction Result")
-        result = "Approved ✅" if prediction==1 else "Rejected ❌"
-        st.write(result)
-else:
-    st.info("Upload the dataset first to enable predictions.")
+# Call the function safely
+trained_models = get_trained_models(df)
+if trained_models:
+    st.success("Models trained successfully!")
 
