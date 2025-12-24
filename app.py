@@ -11,7 +11,7 @@ from sklearn.svm import SVC
 st.set_page_config(page_title="Loan Approval Predictor", page_icon="💰", layout="wide")
 
 # --- Paths ---
-data_path = "data/loan_approval_dataset.csv"
+data_path = "data/loan_approval_dataset.csv"  # Tumhara dataset path
 model_folder = "models"
 os.makedirs(model_folder, exist_ok=True)
 
@@ -34,6 +34,12 @@ def get_trained_models(df):
 
     X = df.drop("Loan_Status", axis=1)
     y = df["Loan_Status"]
+    
+    # Encode categorical columns if any
+    for col in X.columns:
+        if X[col].dtype == 'object':
+            X[col] = X[col].astype('category').cat.codes
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     trained_models = {}
@@ -60,13 +66,26 @@ if df is not None:
     input_data = {}
     for col in df.drop("Loan_Status", axis=1).columns:
         value = st.text_input(f"Enter value for {col}", "")
-        input_data[col] = [float(value) if value else 0]
+        # Handle numeric or categorical inputs
+        if df[col].dtype in ['int64','float64']:
+            input_data[col] = [float(value) if value else 0]
+        else:
+            # Encode categorical input same as training
+            if value:
+                input_data[col] = [pd.Series(df[col]).astype('category').cat.categories.get_loc(value) if value in pd.Series(df[col]).astype('category').cat.categories else 0]
+            else:
+                input_data[col] = [0]
 
     input_df = pd.DataFrame(input_data)
 
-    for name, model in trained_models.items():
-        prediction = model.predict(input_df)[0]
-        st.write(f"**{name} Prediction:** {prediction}")
+    # Choose model for prediction
+    model_choice = st.selectbox("Select Model", list(trained_models.keys()))
+
+    if st.button("Predict"):
+        prediction = trained_models[model_choice].predict(input_df)[0]
+        st.subheader("Prediction Result")
+        result = "Approved ✅" if prediction==1 else "Rejected ❌"
+        st.write(result)
 else:
     st.info("Upload the dataset first to enable predictions.")
 
