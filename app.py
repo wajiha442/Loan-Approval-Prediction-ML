@@ -5,6 +5,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 import os
+import urllib.request
 
 # Page configuration
 st.set_page_config(page_title="Loan Approval Prediction", page_icon="💰", layout="wide")
@@ -13,13 +14,26 @@ st.title("Loan Approval Prediction App")
 # BASE_DIR is the folder where app.py is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Dataset path (absolute)
-dataset_path = os.path.join(BASE_DIR, "data", "loan_approval_dataset.csv")
+# Dataset path
+dataset_folder = os.path.join(BASE_DIR, "data")
+dataset_path = os.path.join(dataset_folder, "loan_approval_dataset.csv")
 
-# Check if file exists
+# Create data folder if it doesn't exist
+if not os.path.exists(dataset_folder):
+    os.makedirs(dataset_folder)
+
+# URL of your dataset (replace this with your dataset's raw GitHub URL or Kaggle URL)
+dataset_url = "https://raw.githubusercontent.com/yourusername/yourrepo/main/data/loan_approval_dataset.csv"
+
+# Download dataset if it doesn't exist
 if not os.path.exists(dataset_path):
-    st.error(f"Dataset not found! Please upload 'loan_approval_dataset.csv' inside the 'data/' folder.")
-    st.stop()  # Stop app if dataset missing
+    st.warning("Dataset not found locally. Downloading dataset...")
+    try:
+        urllib.request.urlretrieve(dataset_url, dataset_path)
+        st.success("Dataset downloaded successfully!")
+    except Exception as e:
+        st.error(f"Failed to download dataset: {e}")
+        st.stop()
 
 # Load dataset
 df = pd.read_csv(dataset_path)
