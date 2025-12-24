@@ -1,4 +1,4 @@
- # app.py
+# app.py
 import streamlit as st
 import pandas as pd
 import pickle
@@ -6,9 +6,11 @@ import os
 
 st.set_page_config(page_title="Loan Approval Predictor", page_icon="💰", layout="wide")
 st.title("Loan Approval Prediction 💰")
-st.write("Enter the applicant's details to predict loan approval.")
+st.write("Enter applicant's details to predict loan approval.")
 
-# Dataset (optional)
+# -----------------------
+# Load dataset (optional)
+# -----------------------
 DATA_PATH = "data/loan_approval_dataset.csv"
 if os.path.exists(DATA_PATH):
     df = pd.read_csv(DATA_PATH)
@@ -17,7 +19,9 @@ if os.path.exists(DATA_PATH):
 else:
     st.warning("Dataset not found in `data/` folder. Predictions will still work.")
 
+# -----------------------
 # Sidebar Inputs
+# -----------------------
 st.sidebar.header("Applicant Details")
 gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
 married = st.sidebar.selectbox("Married", ["Yes", "No"])
@@ -45,9 +49,9 @@ input_data = {
     "Property_Area": property_area
 }
 
-# ----------------------
-# Model loading function
-# ----------------------
+# -----------------------
+# Functions to load models
+# -----------------------
 def load_model(model_path):
     if os.path.exists(model_path):
         with open(model_path, "rb") as file:
@@ -65,7 +69,9 @@ def preprocess_input(input_dict, model_columns=None):
         df = df[model_columns]
     return df
 
-# Models
+# -----------------------
+# Load models
+# -----------------------
 model_paths = {
     "Logistic Regression": "models/logistic_model.pkl",
     "Random Forest": "models/random_forest_model.pkl",
@@ -79,13 +85,14 @@ for name, path in model_paths.items():
     model = load_model(path)
     if model:
         loaded_models[name] = model
-        # If model has 'columns' attribute saved
         if hasattr(model, 'columns'):
             model_columns[name] = model.columns
     else:
         st.warning(f"{name} model not found at `{path}`. This model will be skipped.")
 
-# Prediction button
+# -----------------------
+# Prediction
+# -----------------------
 if st.button("Predict Loan Approval"):
     if not loaded_models:
         st.error("No models available. Please upload pickle files in `models/` folder.")
