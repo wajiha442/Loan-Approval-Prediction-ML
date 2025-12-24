@@ -10,60 +10,63 @@ from sklearn.svm import SVC
 # --- Page config ---
 st.set_page_config(page_title="Loan Approval Predictor", page_icon="💰", layout="wide")
 
-# --- Load dataset ---
+# --- Paths ---
 data_path = "data/loan_approval_dataset.csv"
+model_folder = "models"
+os.makedirs(model_folder, exist_ok=True)
 
+# --- Load dataset safely ---
 if not os.path.exists(data_path):
-    st.error(f"Dataset not found at {data_path}. Please upload the CSV in the data/ folder.")
+    st.warning(f"Dataset not found at {data_path}. Please upload the CSV in the data/ folder.")
+    df = None
 else:
     df = pd.read_csv(data_path)
     st.success("Dataset loaded successfully!")
     st.dataframe(df.head())
 
-# --- Prepare models folder ---
-model_folder = "models"
-os.makedirs(model_folder, exist_ok=True)
+# --- Function to train/load models ---
+def get_trained_models(df):
+    models_info = {
+        "Logistic Regression": {"model": LogisticRegression(max_iter=1000), "file": os.path.join(model_folder, "logistic_model.pkl")},
+        "Random Forest": {"model": RandomForestClassifier(), "file": os.path.join(model_folder, "random_forest_model.pkl")},
+        "SVC": {"model": SVC(probability=True), "file": os.path.join(model_folder, "svc_model.pkl")}
+    }
 
-# --- Define models and file paths ---
-models_info = {
-    "Logistic Regression": {"model": LogisticRegression(max_iter=1000), "file": os.path.join(model_folder, "logistic_model.pkl")},
-    "Random Forest": {"model": RandomForestClassifier(), "file": os.path.join(model_folder, "random_forest_model.pkl")},
-    "SVC": {"model": SVC(probability=True), "file": os.path.join(model_folder, "svc_model.pkl")}
-}
+    X = df.drop("Loan_Status", axis=1)
+    y = df["Loan_Status"]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# --- Train models if not exist ---
-X = df.drop("Loan_Status", axis=1)
-y = df["Loan_Status"]
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    trained_models = {}
+    for name, info in models_info.items():
+        model_file = info["file"]
+        if os.path.exists(model_file):
+            with open(model_file, "rb") as f:
+                trained_models[name] = pickle.load(f)
+            st.info(f"{name} model loaded from file.")
+        else:
+            info["model"].fit(X_train, y_train)
+            with open(model_file, "wb") as f:
+                pickle.dump(info["model"], f)
+            trained_models[name] = info["model"]
+            st.success(f"{name} trained and saved to {model_file}.")
+    return trained_models
 
-trained_models = {}
+# --- Only train/load models if dataset exists ---
+if df is not None:
+    trained_models = get_trained_models(df)
 
-for name, info in models_info.items():
-    model_file = info["file"]
-    
-    if os.path.exists(model_file):
-        # Load existing model
-        with open(model_file, "rb") as f:
-            trained_models[name] = pickle.load(f)
-        st.info(f"{name} model loaded from file.")
-    else:
-        # Train and save model
-        info["model"].fit(X_train, y_train)
-        with open(model_file, "wb") as f:
-            pickle.dump(info["model"], f)
-        trained_models[name] = info["model"]
-        st.success(f"{name} trained and saved to {model_file}.")
+    # --- Prediction UI ---
+    st.header("Make a Prediction")
+    input_data = {}
+    for col in df.drop("Loan_Status", axis=1).columns:
+        value = st.text_input(f"Enter value for {col}", "")
+        input_data[col] = [float(value) if value else 0]
 
-# --- Prediction UI ---
-st.header("Make a Prediction")
-input_data = {}
-for col in X.columns:
-    value = st.text_input(f"Enter value for {col}", "")
-    input_data[col] = [float(value) if value else 0]
+    input_df = pd.DataFrame(input_data)
 
-input_df = pd.DataFrame(input_data)
-
-for name, model in trained_models.items():
-    prediction = model.predict(input_df)[0]
-    st.write(f"**{name} Prediction:** {prediction}")
+    for name, model in trained_models.items():
+        prediction = model.predict(input_df)[0]
+        st.write(f"**{name} Prediction:** {prediction}")
+else:
+    st.info("Upload the dataset first to enable predictions.")
 
