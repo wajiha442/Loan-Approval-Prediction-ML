@@ -12,26 +12,31 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 dataset_path = os.path.join(BASE_DIR, "loan_approval_dataset.csv")
 
 if not os.path.exists(dataset_path):
-    st.error(f"❌ Dataset file ('loan_approval_dataset.csv') nahi mili!")
+    st.error(f"❌ Dataset file nahi mili!")
     st.stop()
 
-# 2. Load Data
+# 2. Load Data with Auto-Separator Detection
 try:
-    df = pd.read_csv(dataset_path)
-    # Sab se pehle column names se extra spaces khatam karein
+    # sep=None aur engine='python' se pandas khud dhoond lega ke separator comma hai ya semicolon
+    df = pd.read_csv(dataset_path, sep=None, engine='python')
+    
+    # Column names se spaces khatam karein
     df.columns = df.columns.str.strip()
     
-    # Preview for debugging
-    with st.expander("Dataset Preview"):
-        st.write(df.head())
-        st.write("Total Columns:", list(df.columns))
+    st.write("### Data Preview:")
+    st.dataframe(df.head())
+    
+    # Agar ab bhi 1 hi column dikh raha ho
+    if len(df.columns) <= 1:
+        st.error(f"⚠️ Dataset mein sirf {len(df.columns)} column mila. Shayad file format sahi nahi hai.")
+        st.write("Columns found:", list(df.columns))
+        st.stop()
 
 except Exception as e:
-    st.error(f"File load karne mein masla: {e}")
+    st.error(f"File load karne mein error: {e}")
     st.stop()
 
-# 3. Target Column dhoondein (Loan Status)
-# Hum check kar rahe hain ke 'loan_status' (choti ya bari abc mein) kahan hai
+# 3. Target Column dhoondein
 target_col = None
 for c in df.columns:
     if 'status' in c.lower():
@@ -39,60 +44,48 @@ for c in df.columns:
         break
 
 if not target_col:
-    st.error("❌ 'Loan Status' wala column nahi mila. Apni CSV file check karein.")
+    st.error("❌ 'loan_status' column nahi mila!")
     st.stop()
 
 # 4. Data Preprocessing
-# Target ko binary (0/1) mein convert karein
+# Target labels clean karein
 df[target_col] = df[target_col].astype(str).str.strip().str.lower()
 df[target_col] = df[target_col].apply(lambda x: 1 if 'approved' in x else 0)
 
-# Features (X) aur Target (y)
+# Features (X) - Sirf numeric columns lein taake error na aaye
 X = df.drop(columns=[target_col])
-y = df[target_col]
 
-# Error Fix: Ensure X is not empty
-if X.empty:
-    st.error("X (Features) khali hain! Dataset mein sirf ek hi column hai shayad.")
-    st.stop()
-
-# Text columns ko numbers mein badalna
-X = pd.get_dummies(X)
+# Important: Convert categorical columns to numbers
+X = pd.get_dummies(X, drop_first=True)
 
 # 5. Model Training
 try:
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y_train_dummy := df[target_col], test_size=0.2, random_state=42)
     model = LogisticRegression(max_iter=1000)
-    model.fit(X_train, y_train)
-    st.success("✅ Model Train ho gaya!")
+    model.fit(X_train, y_train_dummy)
+    st.success("✅ Model ready for predictions!")
 except Exception as e:
-    st.error(f"Training mein error: {e}")
+    st.error(f"Training Error: {e}")
     st.stop()
 
-# 6. User Prediction Interface
+# 6. Prediction Input
 st.write("---")
-st.subheader("📝 Enter Details for Prediction")
-
+st.subheader("Enter Details:")
 user_input = {}
-# Columns ko loops mein dikhayenge input ke liye
-# Pehle 5 columns dikhate hain taake screen bhar na jaye
-cols_to_show = X.columns[:10] 
+# Sirf pehle 8 features dikhayein taake asani ho
+for col in X.columns[:8]:
+    user_input[col] = st.number_input(f"{col}", value=0.0)
 
-for col in cols_to_show:
-    user_input[col] = st.number_input(f"Enter {col}", value=0.0)
-
-if st.button("Predict Loan Status"):
-    # Baqi missing columns ko 0 se bhar dena agar koi reh gaya ho
-    full_input = pd.DataFrame(columns=X.columns)
-    full_input.loc[0] = 0 # Default 0
-    for k, v in user_input.items():
-        full_input[k] = v
-        
-    prediction = model.predict(full_input)
-    res = "Approved ✅" if prediction[0] == 1 else "Rejected ❌"
+if st.button("Predict"):
+    input_df = pd.DataFrame([user_input])
+    # Ensure all columns exist
+    for col in X.columns:
+        if col not in input_df.columns:
+            input_df[col] = 0
+            
+    # Reorder columns to match X_train
+    input_df = input_df[X.columns]
     
-    if prediction[0] == 1:
-        st.balloons()
-        st.success(f"Loan Status: **{res}**")
-    else:
-        st.error(f"Loan Status: **{res}**")
+    prediction = model.predict(input_df)
+    res = "Approved ✅" if prediction[0] == 1 else "Rejected ❌"
+    st.header(f"Result: {res}")
