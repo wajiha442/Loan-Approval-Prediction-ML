@@ -1,92 +1,86 @@
-import streamlit as st
+  import streamlit as st
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 import os
 
-st.set_page_config(page_title="Loan Approval Prediction", page_icon="💰")
-st.title("💰 Loan Approval Prediction App")
+st.set_page_config(page_title="Loan AI", page_icon="💰")
+st.title("💰 Loan Approval Prediction AI")
 
+# --- Load Data ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 dataset_path = os.path.join(BASE_DIR, "loan_approval_dataset.csv")
 
-if not os.path.exists(dataset_path):
-    st.error("❌ Dataset file 'loan_approval_dataset.csv' nahi mili!")
-    st.stop()
-
-try:
-    df = pd.read_csv(dataset_path, sep=None, engine='python')
+@st.cache_resource
+def train_model():
+    df = pd.read_csv(dataset_path)
     df.columns = df.columns.str.strip()
-    df = df.dropna()
-except Exception as e:
-    st.error(f"Data Load Error: {e}")
-    st.stop()
-
-target_col = None
-for c in df.columns:
-    if 'status' in c.lower():
-        target_col = c
-        break
-
-if not target_col:
-    st.error("❌ Target column (Loan Status) nahi mila!")
-    st.stop()
-
-def clean_target(val):
-    val = str(val).strip().lower()
-    if 'app' in val or '1' in val or 'y' in val:
-        return 1
-    return 0
-
-df[target_col] = df[target_col].apply(clean_target)
-
-if df[target_col].nunique() < 2:
-    st.warning("⚠️ Dataset mein sirf aik hi class hai. Testing ke liye dummy data add kiya ja raha hai.")
-    dummy_row = df.iloc[0].copy()
-    dummy_row[target_col] = 1 if df[target_col].iloc[0] == 0 else 0
-    df = pd.concat([df, pd.DataFrame([dummy_row])], ignore_index=True)
-
-y = df[target_col]
-X = df.drop(columns=[target_col])
-
-X = pd.get_dummies(X)
-
-if X.empty:
-    st.error("❌ Features (X) khali hain. Dataset check karein.")
-    st.stop()
+    
+    # Handling Categorical Data (Education, Gender etc)
+    # Hum 'Loan_Status' ko target banayenge
+    target = 'Loan_Status'
+    df[target] = df[target].apply(lambda x: 1 if 'Y' in str(x).upper() or 'APP' in str(x).upper() else 0)
+    
+    # Sirf kaam ki columns select karein
+    features = ['Gender', 'Married', 'Education', 'Self_Employed', 'ApplicantIncome', 'LoanAmount', 'Credit_History']
+    X = df[features].copy()
+    y = df[target]
+    
+    # Categorical text ko numbers mein badalna
+    X = pd.get_dummies(X)
+    
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    return model, X.columns, df
 
 try:
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    model = RandomForestClassifier(n_estimators=100)
-    model.fit(X_train, y_train)
-    st.success(f"✅ Model Trained! (Total Rows: {len(df)})")
+    model, model_cols, full_df = train_model()
+    st.success(f"✅ Model Trained on {len(full_df)} rows!")
 except Exception as e:
-    st.error(f"Training Error: {e}")
+    st.error(f"Error: {e}")
     st.stop()
 
-st.write("---")
-st.subheader("📝 Enter Details:")
-user_input = {}
-input_cols = X.columns[:10]
+# --- User UI ---
+st.subheader("📝 Applicant Information")
+col1, col2 = st.columns(2)
 
-for col in input_cols:
-    user_input[col] = st.number_input(f"Enter {col}", value=0.0)
+with col1:
+    gender = st.selectbox("Gender", ["Male", "Female"])
+    married = st.selectbox("Married", ["Yes", "No"])
+    education = st.selectbox("Education", ["Graduate", "Not Graduate"])
+    self_emp = st.selectbox("Self Employed", ["Yes", "No"])
 
-if st.button("Predict"):
-    input_df = pd.DataFrame([user_input])
-    for col in X.columns:
-        if col not in input_df.columns:
-            input_df[col] = 0.0
+with col2:
+    income = st.number_input("Applicant Income", min_value=0, value=5000)
+    loan_amt = st.number_input("Loan Amount", min_value=0, value=150)
+    # Credit History sabse important hai: 1.0 matlab record acha hai, 0.0 matlab bura
+    credit = st.selectbox("Credit History Score", [1.0, 0.0], help="1.0 is Good, 0.0 is Bad")
+
+if st.button("Check Eligibility"):
+    # Input data prepare karna
+    user_data = pd.DataFrame([{
+        'ApplicantIncome': income,
+        'LoanAmount': loan_amt,
+        'Credit_History': credit,
+        'Gender_Male': 1 if gender == "Male" else 0,
+        'Gender_Female': 1 if gender == "Female" else 0,
+        'Married_Yes': 1 if married == "Yes" else 0,
+        'Married_No': 1 if married == "No" else 0,
+        'Education_Graduate': 1 if education == "Graduate" else 0,
+        'Education_Not Graduate': 1 if education == "Not Graduate" else 0,
+        'Self_Employed_Yes': 1 if self_emp == "Yes" else 0,
+        'Self_Employed_No': 1 if self_emp == "No" else 0
+    }])
     
-    input_df = input_df[X.columns]
-    prediction = model.predict(input_df)
+    # Reindex takay columns model ke mutabiq hon
+    user_data = user_data.reindex(columns=model_cols, fill_value=0)
+    
+    prediction = model.predict(user_data)
     
     if prediction[0] == 1:
         st.balloons()
-        st.success("### Result: Loan Approved ✅")
+        st.success("### Status: Approved ✅")
     else:
-        st.error("### Result: Loan Rejected ❌")
+        st.error("### Status: Rejected ❌")
 
-with st.expander("View Data Preview"):
-    st.write("Columns:", list(df.columns))
-    st.dataframe(df.head())
+with st.expander("Data Preview"):
+    st.write(full_df.head())
