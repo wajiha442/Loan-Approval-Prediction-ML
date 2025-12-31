@@ -1,4 +1,4 @@
- import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
@@ -128,3 +128,4 @@ with st.expander("🎯 Model Information"):
     st.write("**Number of Trees:** 100")
     st.write(f"**Training Samples:** {len(full_df)}")
     st.write(f"**Features Used:** {len(feature_cols)}")
+
