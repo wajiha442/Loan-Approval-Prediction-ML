@@ -1,4 +1,4 @@
- import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -599,3 +599,4 @@ st.markdown("""
     <p style='font-size: 12px;'>Ready to deploy on Streamlit Cloud 🚀</p>
 </div>
 """, unsafe_allow_html=True)
+
