@@ -10,7 +10,6 @@ from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
-from sklearn.datasets import load_iris, load_wine, load_breast_cancer
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -30,56 +29,112 @@ st.markdown("---")
 
 @st.cache_data
 def create_sample_dataset(dataset_name):
-    if dataset_name == "Iris Flowers":
-        data = load_iris()
-        df = pd.DataFrame(data.data, columns=data.feature_names)
-        df['target'] = data.target
-        df['species'] = df['target'].map({0: 'setosa', 1: 'versicolor', 2: 'virginica'})
-        return df
-    elif dataset_name == "Wine Quality":
-        data = load_wine()
-        df = pd.DataFrame(data.data, columns=data.feature_names)
-        df['wine_class'] = data.target
-        return df
-    elif dataset_name == "Breast Cancer":
-        data = load_breast_cancer()
-        df = pd.DataFrame(data.data, columns=data.feature_names)
-        df['diagnosis'] = data.target
-        df['diagnosis_label'] = df['diagnosis'].map({0: 'malignant', 1: 'benign'})
-        return df
-    elif dataset_name == "Customer Churn (Synthetic)":
+    if dataset_name == "Loan Approval Dataset":
         np.random.seed(42)
-        n_samples = 500
+        n_samples = 800
         df = pd.DataFrame({
-            'age': np.random.randint(18, 70, n_samples),
-            'tenure': np.random.randint(1, 72, n_samples),
-            'monthly_charges': np.random.uniform(20, 120, n_samples),
-            'total_charges': np.random.uniform(100, 8000, n_samples),
-            'contract_type': np.random.choice(['Month-to-month', 'One year', 'Two year'], n_samples),
-            'internet_service': np.random.choice(['DSL', 'Fiber optic', 'No'], n_samples),
-            'customer_service_calls': np.random.randint(0, 10, n_samples),
+            'Age': np.random.randint(21, 65, n_samples),
+            'Annual_Income': np.random.randint(20000, 200000, n_samples),
+            'Loan_Amount': np.random.randint(5000, 100000, n_samples),
+            'Credit_Score': np.random.randint(300, 850, n_samples),
+            'Employment_Years': np.random.randint(0, 40, n_samples),
+            'Debt_to_Income_Ratio': np.random.uniform(0, 0.7, n_samples).round(2),
+            'Loan_Term_Months': np.random.choice([12, 24, 36, 48, 60, 72], n_samples),
+            'Number_of_Dependents': np.random.randint(0, 5, n_samples),
+            'Education_Level': np.random.choice(['High School', 'Bachelor', 'Master', 'PhD'], n_samples),
+            'Home_Ownership': np.random.choice(['Rent', 'Own', 'Mortgage'], n_samples),
+            'Previous_Defaults': np.random.choice(['Yes', 'No'], n_samples, p=[0.2, 0.8])
         })
-        churn_prob = ((df['contract_type'] == 'Month-to-month') * 0.3 + (df['monthly_charges'] > 80) * 0.2 + (df['customer_service_calls'] > 5) * 0.3 + np.random.random(n_samples) * 0.2)
-        df['churn'] = (churn_prob > 0.5).astype(int)
-        df['churn_label'] = df['churn'].map({0: 'No', 1: 'Yes'})
+        approval_score = ((df['Credit_Score'] > 650) * 0.35 + (df['Annual_Income'] > 50000) * 0.25 + (df['Debt_to_Income_Ratio'] < 0.4) * 0.2 + (df['Employment_Years'] > 3) * 0.1 + (df['Previous_Defaults'] == 'No') * 0.1)
+        df['Loan_Status'] = np.where(approval_score + np.random.uniform(-0.2, 0.2, n_samples) > 0.5, 'Approved', 'Rejected')
         return df
-    elif dataset_name == "Loan Approval (Synthetic)":
+    
+    elif dataset_name == "Customer Churn Dataset":
+        np.random.seed(42)
+        n_samples = 700
+        df = pd.DataFrame({
+            'Customer_Age': np.random.randint(18, 70, n_samples),
+            'Tenure_Months': np.random.randint(1, 72, n_samples),
+            'Monthly_Charges': np.random.uniform(20, 150, n_samples).round(2),
+            'Total_Charges': np.random.uniform(100, 10000, n_samples).round(2),
+            'Contract_Type': np.random.choice(['Month-to-Month', 'One Year', 'Two Year'], n_samples, p=[0.5, 0.3, 0.2]),
+            'Internet_Service': np.random.choice(['DSL', 'Fiber Optic', 'No'], n_samples),
+            'Customer_Service_Calls': np.random.randint(0, 10, n_samples),
+            'Tech_Support': np.random.choice(['Yes', 'No'], n_samples),
+            'Online_Security': np.random.choice(['Yes', 'No'], n_samples),
+            'Payment_Method': np.random.choice(['Credit Card', 'Bank Transfer', 'Electronic Check', 'Mailed Check'], n_samples)
+        })
+        churn_prob = ((df['Contract_Type'] == 'Month-to-Month') * 0.3 + (df['Monthly_Charges'] > 80) * 0.2 + (df['Customer_Service_Calls'] > 5) * 0.25 + (df['Tech_Support'] == 'No') * 0.15 + np.random.uniform(0, 0.1, n_samples))
+        df['Churn'] = np.where(churn_prob > 0.5, 'Yes', 'No')
+        return df
+    
+    elif dataset_name == "Credit Card Fraud Detection":
+        np.random.seed(42)
+        n_samples = 1000
+        n_fraud = int(n_samples * 0.15)
+        n_normal = n_samples - n_fraud
+        normal_transactions = pd.DataFrame({
+            'Transaction_Amount': np.random.uniform(5, 500, n_normal).round(2),
+            'Transaction_Hour': np.random.randint(6, 23, n_normal),
+            'Days_Since_Last_Transaction': np.random.randint(0, 30, n_normal),
+            'Number_of_Transactions_Today': np.random.randint(1, 5, n_normal),
+            'Average_Transaction_Amount': np.random.uniform(50, 300, n_normal).round(2),
+            'Card_Age_Days': np.random.randint(100, 2000, n_normal),
+            'Online_Transaction': np.random.choice(['Yes', 'No'], n_normal, p=[0.6, 0.4]),
+            'International': np.random.choice(['Yes', 'No'], n_normal, p=[0.1, 0.9]),
+            'Is_Fraud': 'No'
+        })
+        fraud_transactions = pd.DataFrame({
+            'Transaction_Amount': np.random.uniform(300, 2000, n_fraud).round(2),
+            'Transaction_Hour': np.random.randint(0, 24, n_fraud),
+            'Days_Since_Last_Transaction': np.random.randint(0, 2, n_fraud),
+            'Number_of_Transactions_Today': np.random.randint(5, 15, n_fraud),
+            'Average_Transaction_Amount': np.random.uniform(50, 200, n_fraud).round(2),
+            'Card_Age_Days': np.random.randint(10, 500, n_fraud),
+            'Online_Transaction': np.random.choice(['Yes', 'No'], n_fraud, p=[0.9, 0.1]),
+            'International': np.random.choice(['Yes', 'No'], n_fraud, p=[0.4, 0.6]),
+            'Is_Fraud': 'Yes'
+        })
+        df = pd.concat([normal_transactions, fraud_transactions], ignore_index=True).sample(frac=1, random_state=42).reset_index(drop=True)
+        return df
+    
+    elif dataset_name == "Employee Attrition Dataset":
         np.random.seed(42)
         n_samples = 600
         df = pd.DataFrame({
-            'age': np.random.randint(21, 65, n_samples),
-            'income': np.random.randint(20000, 150000, n_samples),
-            'loan_amount': np.random.randint(5000, 50000, n_samples),
-            'credit_score': np.random.randint(300, 850, n_samples),
-            'employment_years': np.random.randint(0, 40, n_samples),
-            'debt_to_income': np.random.uniform(0, 0.6, n_samples),
-            'loan_term': np.random.choice([12, 24, 36, 48, 60], n_samples),
-            'education': np.random.choice(['High School', 'Bachelor', 'Master', 'PhD'], n_samples),
-            'home_ownership': np.random.choice(['Rent', 'Own', 'Mortgage'], n_samples),
+            'Age': np.random.randint(22, 60, n_samples),
+            'Years_at_Company': np.random.randint(0, 25, n_samples),
+            'Monthly_Income': np.random.randint(30000, 150000, n_samples),
+            'Job_Satisfaction': np.random.randint(1, 5, n_samples),
+            'Work_Life_Balance': np.random.randint(1, 5, n_samples),
+            'Years_Since_Promotion': np.random.randint(0, 15, n_samples),
+            'Number_of_Projects': np.random.randint(2, 8, n_samples),
+            'Overtime': np.random.choice(['Yes', 'No'], n_samples, p=[0.3, 0.7]),
+            'Department': np.random.choice(['Sales', 'IT', 'HR', 'Marketing', 'Finance'], n_samples),
+            'Education_Level': np.random.choice(['Bachelor', 'Master', 'PhD'], n_samples, p=[0.6, 0.3, 0.1]),
+            'Business_Travel': np.random.choice(['Rarely', 'Frequently', 'No Travel'], n_samples)
         })
-        approval_score = ((df['credit_score'] > 650) * 0.3 + (df['income'] > 50000) * 0.2 + (df['debt_to_income'] < 0.4) * 0.2 + (df['employment_years'] > 2) * 0.15 + np.random.random(n_samples) * 0.15)
-        df['loan_approved'] = (approval_score > 0.5).astype(int)
-        df['approval_status'] = df['loan_approved'].map({0: 'Rejected', 1: 'Approved'})
+        attrition_score = ((df['Job_Satisfaction'] < 2) * 0.3 + (df['Work_Life_Balance'] < 2) * 0.25 + (df['Overtime'] == 'Yes') * 0.2 + (df['Years_Since_Promotion'] > 5) * 0.15 + np.random.uniform(0, 0.1, n_samples))
+        df['Attrition'] = np.where(attrition_score > 0.4, 'Yes', 'No')
+        return df
+    
+    elif dataset_name == "Student Performance Dataset":
+        np.random.seed(42)
+        n_samples = 500
+        df = pd.DataFrame({
+            'Study_Hours_Per_Week': np.random.randint(5, 50, n_samples),
+            'Attendance_Percentage': np.random.uniform(60, 100, n_samples).round(1),
+            'Previous_Exam_Score': np.random.randint(40, 100, n_samples),
+            'Assignment_Score': np.random.randint(50, 100, n_samples),
+            'Extracurricular_Activities': np.random.choice(['Yes', 'No'], n_samples, p=[0.4, 0.6]),
+            'Parent_Education': np.random.choice(['High School', 'Bachelor', 'Master', 'PhD'], n_samples),
+            'Internet_Access': np.random.choice(['Yes', 'No'], n_samples, p=[0.8, 0.2]),
+            'Family_Size': np.random.randint(2, 7, n_samples),
+            'School_Type': np.random.choice(['Public', 'Private'], n_samples, p=[0.7, 0.3]),
+            'Tutoring': np.random.choice(['Yes', 'No'], n_samples, p=[0.3, 0.7])
+        })
+        performance_score = ((df['Study_Hours_Per_Week'] > 20) * 0.25 + (df['Attendance_Percentage'] > 85) * 0.2 + (df['Previous_Exam_Score'] > 70) * 0.25 + (df['Assignment_Score'] > 75) * 0.15 + (df['Tutoring'] == 'Yes') * 0.15)
+        df['Final_Grade'] = np.where(performance_score + np.random.uniform(-0.2, 0.2, n_samples) > 0.5, 'Pass', 'Fail')
         return df
 
 st.header("📁 Step 1: Choose Dataset")
@@ -91,12 +146,12 @@ df = None
 with tab1:
     st.markdown("### Select a Sample Dataset to Try the App")
     st.info("👉 Perfect for testing! Choose one of our sample datasets below.")
-    sample_dataset = st.selectbox("Choose a sample dataset:", ["Iris Flowers", "Wine Quality", "Breast Cancer", "Customer Churn (Synthetic)", "Loan Approval (Synthetic)"])
+    sample_dataset = st.selectbox("Choose a sample dataset:", ["Loan Approval Dataset", "Customer Churn Dataset", "Credit Card Fraud Detection", "Employee Attrition Dataset", "Student Performance Dataset"])
     if st.button("📊 Load Sample Dataset", type="primary"):
         df = create_sample_dataset(sample_dataset)
         st.session_state.df = df
         st.session_state.dataset_loaded = True
-        st.success(f"✅ {sample_dataset} dataset loaded! Shape: {df.shape}")
+        st.success(f"✅ {sample_dataset} loaded! Shape: {df.shape}")
         st.rerun()
 
 with tab2:
