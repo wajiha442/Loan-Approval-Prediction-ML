@@ -46,7 +46,7 @@ def create_sample_dataset(dataset_name):
             'Previous_Defaults': np.random.choice(['Yes', 'No'], n_samples, p=[0.2, 0.8])
         })
         approval_score = ((df['Credit_Score'] > 650) * 0.35 + (df['Annual_Income'] > 50000) * 0.25 + (df['Debt_to_Income_Ratio'] < 0.4) * 0.2 + (df['Employment_Years'] > 3) * 0.1 + (df['Previous_Defaults'] == 'No') * 0.1)
-        df['Loan_Status'] = np.where(approval_score + np.random.uniform(-0.2, 0.2, n_samples) > 0.5, 'Approved', 'Rejected')
+        df['Loan_Status'] = np.where(approval_score + np.random.uniform(-0.1, 0.1, n_samples) > 0.5, 'Approved', 'Rejected')
         return df
     
     elif dataset_name == "Customer Churn Dataset":
@@ -64,7 +64,7 @@ def create_sample_dataset(dataset_name):
             'Online_Security': np.random.choice(['Yes', 'No'], n_samples),
             'Payment_Method': np.random.choice(['Credit Card', 'Bank Transfer', 'Electronic Check', 'Mailed Check'], n_samples)
         })
-        churn_prob = ((df['Contract_Type'] == 'Month-to-Month') * 0.3 + (df['Monthly_Charges'] > 80) * 0.2 + (df['Customer_Service_Calls'] > 5) * 0.25 + (df['Tech_Support'] == 'No') * 0.15 + np.random.uniform(0, 0.1, n_samples))
+        churn_prob = ((df['Contract_Type'] == 'Month-to-Month') * 0.3 + (df['Monthly_Charges'] > 80) * 0.2 + (df['Customer_Service_Calls'] > 5) * 0.25 + (df['Tech_Support'] == 'No') * 0.15 + np.random.uniform(0, 0.05, n_samples))
         df['Churn'] = np.where(churn_prob > 0.5, 'Yes', 'No')
         return df
     
@@ -114,7 +114,7 @@ def create_sample_dataset(dataset_name):
             'Education_Level': np.random.choice(['Bachelor', 'Master', 'PhD'], n_samples, p=[0.6, 0.3, 0.1]),
             'Business_Travel': np.random.choice(['Rarely', 'Frequently', 'No Travel'], n_samples)
         })
-        attrition_score = ((df['Job_Satisfaction'] < 2) * 0.3 + (df['Work_Life_Balance'] < 2) * 0.25 + (df['Overtime'] == 'Yes') * 0.2 + (df['Years_Since_Promotion'] > 5) * 0.15 + np.random.uniform(0, 0.1, n_samples))
+        attrition_score = ((df['Job_Satisfaction'] < 2) * 0.3 + (df['Work_Life_Balance'] < 2) * 0.25 + (df['Overtime'] == 'Yes') * 0.2 + (df['Years_Since_Promotion'] > 5) * 0.15 + np.random.uniform(0, 0.05, n_samples))
         df['Attrition'] = np.where(attrition_score > 0.4, 'Yes', 'No')
         return df
     
@@ -134,7 +134,7 @@ def create_sample_dataset(dataset_name):
             'Tutoring': np.random.choice(['Yes', 'No'], n_samples, p=[0.3, 0.7])
         })
         performance_score = ((df['Study_Hours_Per_Week'] > 20) * 0.25 + (df['Attendance_Percentage'] > 85) * 0.2 + (df['Previous_Exam_Score'] > 70) * 0.25 + (df['Assignment_Score'] > 75) * 0.15 + (df['Tutoring'] == 'Yes') * 0.15)
-        df['Final_Grade'] = np.where(performance_score + np.random.uniform(-0.2, 0.2, n_samples) > 0.5, 'Pass', 'Fail')
+        df['Final_Grade'] = np.where(performance_score + np.random.uniform(-0.1, 0.1, n_samples) > 0.5, 'Pass', 'Fail')
         return df
 
 st.header("📁 Step 1: Choose Dataset")
