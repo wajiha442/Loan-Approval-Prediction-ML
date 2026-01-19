@@ -1,13 +1,13 @@
-import streamlit as st
+ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
 import warnings
@@ -23,7 +23,7 @@ Welcome to the **ML Model Trainer**! This application allows you to:
 - Use a sample dataset or upload your own CSV
 - Perform exploratory data analysis (EDA)
 - Visualize data patterns
-- Train and evaluate machine learning models
+- Train and evaluate machine learning models with optimized performance
 """)
 st.markdown("---")
 
@@ -31,110 +31,175 @@ st.markdown("---")
 def create_sample_dataset(dataset_name):
     if dataset_name == "Loan Approval Dataset":
         np.random.seed(42)
-        n_samples = 800
+        n_samples = 1000
+        
+        # Create more realistic features with stronger correlations
+        credit_scores = np.random.normal(680, 80, n_samples).clip(300, 850)
+        annual_income = np.random.normal(65000, 30000, n_samples).clip(20000, 200000)
+        employment_years = np.random.exponential(5, n_samples).clip(0, 40)
+        
         df = pd.DataFrame({
             'Age': np.random.randint(21, 65, n_samples),
-            'Annual_Income': np.random.randint(20000, 200000, n_samples),
+            'Annual_Income': annual_income,
+            'Credit_Score': credit_scores,
+            'Employment_Years': employment_years,
+            'Debt_to_Income_Ratio': np.random.beta(2, 5, n_samples) * 0.7,
             'Loan_Amount': np.random.randint(5000, 100000, n_samples),
-            'Credit_Score': np.random.randint(300, 850, n_samples),
-            'Employment_Years': np.random.randint(0, 40, n_samples),
-            'Debt_to_Income_Ratio': np.random.uniform(0, 0.7, n_samples).round(2),
             'Loan_Term_Months': np.random.choice([12, 24, 36, 48, 60, 72], n_samples),
-            'Number_of_Dependents': np.random.randint(0, 5, n_samples),
-            'Education_Level': np.random.choice(['High School', 'Bachelor', 'Master', 'PhD'], n_samples),
-            'Home_Ownership': np.random.choice(['Rent', 'Own', 'Mortgage'], n_samples),
-            'Previous_Defaults': np.random.choice(['Yes', 'No'], n_samples, p=[0.2, 0.8])
+            'Number_of_Dependents': np.random.choice([0, 1, 2, 3, 4], n_samples, p=[0.3, 0.3, 0.2, 0.15, 0.05]),
+            'Education_Level': np.random.choice(['High School', 'Bachelor', 'Master', 'PhD'], n_samples, p=[0.3, 0.4, 0.2, 0.1]),
+            'Home_Ownership': np.random.choice(['Rent', 'Own', 'Mortgage'], n_samples, p=[0.3, 0.3, 0.4]),
+            'Previous_Defaults': np.random.choice(['Yes', 'No'], n_samples, p=[0.15, 0.85])
         })
-        approval_score = ((df['Credit_Score'] > 650) * 0.35 + (df['Annual_Income'] > 50000) * 0.25 + (df['Debt_to_Income_Ratio'] < 0.4) * 0.2 + (df['Employment_Years'] > 3) * 0.1 + (df['Previous_Defaults'] == 'No') * 0.1)
-        df['Loan_Status'] = np.where(approval_score + np.random.uniform(-0.1, 0.1, n_samples) > 0.5, 'Approved', 'Rejected')
+        
+        # Create strong predictive relationship
+        approval_score = (
+            (df['Credit_Score'] > 650).astype(int) * 0.30 +
+            (df['Annual_Income'] > 50000).astype(int) * 0.25 +
+            (df['Debt_to_Income_Ratio'] < 0.35).astype(int) * 0.20 +
+            (df['Employment_Years'] > 2).astype(int) * 0.15 +
+            (df['Previous_Defaults'] == 'No').astype(int) * 0.10
+        )
+        
+        # Add some noise but keep strong signal
+        noise = np.random.normal(0, 0.08, n_samples)
+        df['Loan_Status'] = np.where(approval_score + noise > 0.55, 'Approved', 'Rejected')
+        
         return df
     
     elif dataset_name == "Customer Churn Dataset":
         np.random.seed(42)
-        n_samples = 700
+        n_samples = 1000
+        
+        tenure = np.random.exponential(12, n_samples).clip(1, 72)
+        monthly_charges = np.random.normal(70, 30, n_samples).clip(20, 150)
+        
         df = pd.DataFrame({
             'Customer_Age': np.random.randint(18, 70, n_samples),
-            'Tenure_Months': np.random.randint(1, 72, n_samples),
-            'Monthly_Charges': np.random.uniform(20, 150, n_samples).round(2),
-            'Total_Charges': np.random.uniform(100, 10000, n_samples).round(2),
+            'Tenure_Months': tenure,
+            'Monthly_Charges': monthly_charges,
+            'Total_Charges': tenure * monthly_charges + np.random.normal(0, 500, n_samples),
             'Contract_Type': np.random.choice(['Month-to-Month', 'One Year', 'Two Year'], n_samples, p=[0.5, 0.3, 0.2]),
-            'Internet_Service': np.random.choice(['DSL', 'Fiber Optic', 'No'], n_samples),
-            'Customer_Service_Calls': np.random.randint(0, 10, n_samples),
-            'Tech_Support': np.random.choice(['Yes', 'No'], n_samples),
-            'Online_Security': np.random.choice(['Yes', 'No'], n_samples),
+            'Internet_Service': np.random.choice(['DSL', 'Fiber Optic', 'No'], n_samples, p=[0.3, 0.5, 0.2]),
+            'Customer_Service_Calls': np.random.poisson(2, n_samples).clip(0, 10),
+            'Tech_Support': np.random.choice(['Yes', 'No'], n_samples, p=[0.4, 0.6]),
+            'Online_Security': np.random.choice(['Yes', 'No'], n_samples, p=[0.45, 0.55]),
             'Payment_Method': np.random.choice(['Credit Card', 'Bank Transfer', 'Electronic Check', 'Mailed Check'], n_samples)
         })
-        churn_prob = ((df['Contract_Type'] == 'Month-to-Month') * 0.3 + (df['Monthly_Charges'] > 80) * 0.2 + (df['Customer_Service_Calls'] > 5) * 0.25 + (df['Tech_Support'] == 'No') * 0.15 + np.random.uniform(0, 0.05, n_samples))
-        df['Churn'] = np.where(churn_prob > 0.5, 'Yes', 'No')
+        
+        churn_prob = (
+            (df['Contract_Type'] == 'Month-to-Month').astype(int) * 0.35 +
+            (df['Tenure_Months'] < 12).astype(int) * 0.25 +
+            (df['Customer_Service_Calls'] > 4).astype(int) * 0.20 +
+            (df['Tech_Support'] == 'No').astype(int) * 0.12 +
+            (df['Monthly_Charges'] > 80).astype(int) * 0.08
+        )
+        
+        noise = np.random.normal(0, 0.1, n_samples)
+        df['Churn'] = np.where(churn_prob + noise > 0.5, 'Yes', 'No')
+        
         return df
     
     elif dataset_name == "Credit Card Fraud Detection":
         np.random.seed(42)
-        n_samples = 1000
-        n_fraud = int(n_samples * 0.15)
+        n_samples = 1200
+        n_fraud = int(n_samples * 0.12)
         n_normal = n_samples - n_fraud
+        
         normal_transactions = pd.DataFrame({
-            'Transaction_Amount': np.random.uniform(5, 500, n_normal).round(2),
-            'Transaction_Hour': np.random.randint(6, 23, n_normal),
-            'Days_Since_Last_Transaction': np.random.randint(0, 30, n_normal),
-            'Number_of_Transactions_Today': np.random.randint(1, 5, n_normal),
-            'Average_Transaction_Amount': np.random.uniform(50, 300, n_normal).round(2),
-            'Card_Age_Days': np.random.randint(100, 2000, n_normal),
+            'Transaction_Amount': np.random.gamma(2, 50, n_normal).clip(5, 500),
+            'Transaction_Hour': np.random.choice(range(6, 23), n_normal),
+            'Days_Since_Last_Transaction': np.random.exponential(5, n_normal).clip(0, 30),
+            'Number_of_Transactions_Today': np.random.choice([1, 2, 3, 4], n_normal, p=[0.5, 0.3, 0.15, 0.05]),
+            'Average_Transaction_Amount': np.random.normal(150, 50, n_normal).clip(50, 300),
+            'Card_Age_Days': np.random.uniform(365, 2000, n_normal),
             'Online_Transaction': np.random.choice(['Yes', 'No'], n_normal, p=[0.6, 0.4]),
-            'International': np.random.choice(['Yes', 'No'], n_normal, p=[0.1, 0.9]),
+            'International': np.random.choice(['Yes', 'No'], n_normal, p=[0.08, 0.92]),
             'Is_Fraud': 'No'
         })
+        
         fraud_transactions = pd.DataFrame({
-            'Transaction_Amount': np.random.uniform(300, 2000, n_fraud).round(2),
-            'Transaction_Hour': np.random.randint(0, 24, n_fraud),
-            'Days_Since_Last_Transaction': np.random.randint(0, 2, n_fraud),
-            'Number_of_Transactions_Today': np.random.randint(5, 15, n_fraud),
-            'Average_Transaction_Amount': np.random.uniform(50, 200, n_fraud).round(2),
-            'Card_Age_Days': np.random.randint(10, 500, n_fraud),
-            'Online_Transaction': np.random.choice(['Yes', 'No'], n_fraud, p=[0.9, 0.1]),
-            'International': np.random.choice(['Yes', 'No'], n_fraud, p=[0.4, 0.6]),
+            'Transaction_Amount': np.random.uniform(500, 2500, n_fraud),
+            'Transaction_Hour': np.random.choice(list(range(0, 6)) + list(range(22, 24)), n_fraud),
+            'Days_Since_Last_Transaction': np.random.choice([0, 1], n_fraud),
+            'Number_of_Transactions_Today': np.random.choice(range(6, 20), n_fraud),
+            'Average_Transaction_Amount': np.random.normal(120, 40, n_fraud).clip(50, 200),
+            'Card_Age_Days': np.random.uniform(10, 400, n_fraud),
+            'Online_Transaction': np.random.choice(['Yes', 'No'], n_fraud, p=[0.95, 0.05]),
+            'International': np.random.choice(['Yes', 'No'], n_fraud, p=[0.6, 0.4]),
             'Is_Fraud': 'Yes'
         })
-        df = pd.concat([normal_transactions, fraud_transactions], ignore_index=True).sample(frac=1, random_state=42).reset_index(drop=True)
+        
+        df = pd.concat([normal_transactions, fraud_transactions], ignore_index=True)
+        df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+        
         return df
     
     elif dataset_name == "Employee Attrition Dataset":
         np.random.seed(42)
-        n_samples = 600
+        n_samples = 800
+        
+        job_satisfaction = np.random.choice([1, 2, 3, 4], n_samples, p=[0.15, 0.25, 0.35, 0.25])
+        work_life_balance = np.random.choice([1, 2, 3, 4], n_samples, p=[0.1, 0.2, 0.4, 0.3])
+        
         df = pd.DataFrame({
             'Age': np.random.randint(22, 60, n_samples),
-            'Years_at_Company': np.random.randint(0, 25, n_samples),
-            'Monthly_Income': np.random.randint(30000, 150000, n_samples),
-            'Job_Satisfaction': np.random.randint(1, 5, n_samples),
-            'Work_Life_Balance': np.random.randint(1, 5, n_samples),
-            'Years_Since_Promotion': np.random.randint(0, 15, n_samples),
-            'Number_of_Projects': np.random.randint(2, 8, n_samples),
-            'Overtime': np.random.choice(['Yes', 'No'], n_samples, p=[0.3, 0.7]),
+            'Years_at_Company': np.random.exponential(5, n_samples).clip(0, 25),
+            'Monthly_Income': np.random.normal(70000, 30000, n_samples).clip(30000, 150000),
+            'Job_Satisfaction': job_satisfaction,
+            'Work_Life_Balance': work_life_balance,
+            'Years_Since_Promotion': np.random.exponential(3, n_samples).clip(0, 15),
+            'Number_of_Projects': np.random.choice([2, 3, 4, 5, 6, 7], n_samples, p=[0.1, 0.2, 0.3, 0.2, 0.15, 0.05]),
+            'Overtime': np.random.choice(['Yes', 'No'], n_samples, p=[0.28, 0.72]),
             'Department': np.random.choice(['Sales', 'IT', 'HR', 'Marketing', 'Finance'], n_samples),
             'Education_Level': np.random.choice(['Bachelor', 'Master', 'PhD'], n_samples, p=[0.6, 0.3, 0.1]),
-            'Business_Travel': np.random.choice(['Rarely', 'Frequently', 'No Travel'], n_samples)
+            'Business_Travel': np.random.choice(['Rarely', 'Frequently', 'No Travel'], n_samples, p=[0.5, 0.3, 0.2])
         })
-        attrition_score = ((df['Job_Satisfaction'] < 2) * 0.3 + (df['Work_Life_Balance'] < 2) * 0.25 + (df['Overtime'] == 'Yes') * 0.2 + (df['Years_Since_Promotion'] > 5) * 0.15 + np.random.uniform(0, 0.05, n_samples))
-        df['Attrition'] = np.where(attrition_score > 0.4, 'Yes', 'No')
+        
+        attrition_score = (
+            (df['Job_Satisfaction'] <= 2).astype(int) * 0.35 +
+            (df['Work_Life_Balance'] <= 2).astype(int) * 0.25 +
+            (df['Overtime'] == 'Yes').astype(int) * 0.20 +
+            (df['Years_Since_Promotion'] > 6).astype(int) * 0.15 +
+            (df['Years_at_Company'] < 2).astype(int) * 0.05
+        )
+        
+        noise = np.random.normal(0, 0.08, n_samples)
+        df['Attrition'] = np.where(attrition_score + noise > 0.45, 'Yes', 'No')
+        
         return df
     
     elif dataset_name == "Student Performance Dataset":
         np.random.seed(42)
-        n_samples = 500
+        n_samples = 700
+        
+        study_hours = np.random.gamma(3, 5, n_samples).clip(5, 50)
+        attendance = np.random.beta(8, 2, n_samples) * 40 + 60
+        
         df = pd.DataFrame({
-            'Study_Hours_Per_Week': np.random.randint(5, 50, n_samples),
-            'Attendance_Percentage': np.random.uniform(60, 100, n_samples).round(1),
-            'Previous_Exam_Score': np.random.randint(40, 100, n_samples),
-            'Assignment_Score': np.random.randint(50, 100, n_samples),
-            'Extracurricular_Activities': np.random.choice(['Yes', 'No'], n_samples, p=[0.4, 0.6]),
-            'Parent_Education': np.random.choice(['High School', 'Bachelor', 'Master', 'PhD'], n_samples),
-            'Internet_Access': np.random.choice(['Yes', 'No'], n_samples, p=[0.8, 0.2]),
-            'Family_Size': np.random.randint(2, 7, n_samples),
-            'School_Type': np.random.choice(['Public', 'Private'], n_samples, p=[0.7, 0.3]),
-            'Tutoring': np.random.choice(['Yes', 'No'], n_samples, p=[0.3, 0.7])
+            'Study_Hours_Per_Week': study_hours,
+            'Attendance_Percentage': attendance,
+            'Previous_Exam_Score': np.random.normal(70, 15, n_samples).clip(40, 100),
+            'Assignment_Score': np.random.normal(75, 12, n_samples).clip(50, 100),
+            'Extracurricular_Activities': np.random.choice(['Yes', 'No'], n_samples, p=[0.45, 0.55]),
+            'Parent_Education': np.random.choice(['High School', 'Bachelor', 'Master', 'PhD'], n_samples, p=[0.3, 0.4, 0.2, 0.1]),
+            'Internet_Access': np.random.choice(['Yes', 'No'], n_samples, p=[0.85, 0.15]),
+            'Family_Size': np.random.choice([2, 3, 4, 5, 6], n_samples, p=[0.15, 0.25, 0.35, 0.2, 0.05]),
+            'School_Type': np.random.choice(['Public', 'Private'], n_samples, p=[0.65, 0.35]),
+            'Tutoring': np.random.choice(['Yes', 'No'], n_samples, p=[0.35, 0.65])
         })
-        performance_score = ((df['Study_Hours_Per_Week'] > 20) * 0.25 + (df['Attendance_Percentage'] > 85) * 0.2 + (df['Previous_Exam_Score'] > 70) * 0.25 + (df['Assignment_Score'] > 75) * 0.15 + (df['Tutoring'] == 'Yes') * 0.15)
-        df['Final_Grade'] = np.where(performance_score + np.random.uniform(-0.1, 0.1, n_samples) > 0.5, 'Pass', 'Fail')
+        
+        performance_score = (
+            (df['Study_Hours_Per_Week'] > 15).astype(int) * 0.28 +
+            (df['Attendance_Percentage'] > 80).astype(int) * 0.22 +
+            (df['Previous_Exam_Score'] > 65).astype(int) * 0.25 +
+            (df['Assignment_Score'] > 70).astype(int) * 0.18 +
+            (df['Tutoring'] == 'Yes').astype(int) * 0.07
+        )
+        
+        noise = np.random.normal(0, 0.1, n_samples)
+        df['Final_Grade'] = np.where(performance_score + noise > 0.5, 'Pass', 'Fail')
+        
         return df
 
 st.header("📁 Step 1: Choose Dataset")
@@ -145,8 +210,13 @@ df = None
 
 with tab1:
     st.markdown("### Select a Sample Dataset to Try the App")
-    st.info("👉 Perfect for testing! Choose one of our sample datasets below.")
-    sample_dataset = st.selectbox("Choose a sample dataset:", ["Loan Approval Dataset", "Customer Churn Dataset", "Credit Card Fraud Detection", "Employee Attrition Dataset", "Student Performance Dataset"])
+    st.info("👉 Perfect for testing! Choose one of our optimized sample datasets below.")
+    sample_dataset = st.selectbox("Choose a sample dataset:", 
+                                  ["Loan Approval Dataset", 
+                                   "Customer Churn Dataset", 
+                                   "Credit Card Fraud Detection", 
+                                   "Employee Attrition Dataset", 
+                                   "Student Performance Dataset"])
     if st.button("📊 Load Sample Dataset", type="primary"):
         df = create_sample_dataset(sample_dataset)
         st.session_state.df = df
@@ -179,8 +249,6 @@ st.dataframe(df.head(10))
 st.markdown("---")
 st.header("🔍 Step 2: Exploratory Data Analysis (EDA)")
 
-st.success("✅ **EDA PERFORMED**")
-
 col1, col2, col3 = st.columns(3)
 with col1:
     st.metric("Total Rows", df.shape[0])
@@ -195,7 +263,12 @@ col_info1, col_info2 = st.columns(2)
 
 with col_info1:
     st.write("**Column Names and Data Types:**")
-    info_df = pd.DataFrame({'Column': df.columns, 'Data Type': df.dtypes.values, 'Non-Null Count': df.count().values, 'Null Count': df.isnull().sum().values})
+    info_df = pd.DataFrame({
+        'Column': df.columns,
+        'Data Type': df.dtypes.values,
+        'Non-Null Count': df.count().values,
+        'Null Count': df.isnull().sum().values
+    })
     st.dataframe(info_df, use_container_width=True)
 
 with col_info2:
@@ -219,36 +292,6 @@ if len(missing_data) > 0:
 else:
     st.success("✅ No missing values found in the dataset!")
 
-st.subheader("📊 Data Types Distribution")
-dtype_counts = df.dtypes.value_counts()
-col_dtype1, col_dtype2 = st.columns(2)
-
-with col_dtype1:
-    fig, ax = plt.subplots(figsize=(6, 4))
-    colors = ['#ff9999', '#66b3ff', '#99ff99', '#ffcc99']
-    dtype_counts.plot(kind='pie', autopct='%1.1f%%', ax=ax, colors=colors[:len(dtype_counts)])
-    ax.set_ylabel('')
-    ax.set_title('Data Types Distribution')
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.clf()
-
-with col_dtype2:
-    st.write("**Numerical Columns:**")
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    if numeric_cols:
-        for col in numeric_cols:
-            st.write(f"• {col}")
-    else:
-        st.write("None")
-    st.write("**Categorical Columns:**")
-    categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
-    if categorical_cols:
-        for col in categorical_cols:
-            st.write(f"• {col}")
-    else:
-        st.write("None")
-
 st.markdown("---")
 st.header("📈 Step 3: Data Visualizations")
 
@@ -259,16 +302,19 @@ if numeric_cols:
     st.subheader("📊 Histograms (Numerical Features)")
     default_hist_cols = numeric_cols[:min(4, len(numeric_cols))]
     selected_cols_hist = st.multiselect("Select columns for histograms:", numeric_cols, default=default_hist_cols)
+    
     if selected_cols_hist:
         n_cols = 2
         n_rows = (len(selected_cols_hist) + 1) // 2
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, n_rows * 4))
+        
         if n_rows == 1 and n_cols == 1:
             axes = [axes]
         elif n_rows == 1:
             axes = axes
         else:
             axes = axes.flatten()
+        
         for idx, col in enumerate(selected_cols_hist):
             if idx < len(axes):
                 axes[idx].hist(df[col].dropna(), bins=30, color='skyblue', edgecolor='black', alpha=0.7)
@@ -276,47 +322,20 @@ if numeric_cols:
                 axes[idx].set_xlabel(col)
                 axes[idx].set_ylabel('Frequency')
                 axes[idx].grid(alpha=0.3)
+        
         for idx in range(len(selected_cols_hist), len(axes)):
             axes[idx].axis('off')
+        
         plt.tight_layout()
         st.pyplot(fig)
         plt.clf()
-    else:
-        st.info("Select at least one column to display histograms")
-
-if numeric_cols:
-    st.subheader("📦 Box Plots (Outlier Detection)")
-    default_box_cols = numeric_cols[:min(3, len(numeric_cols))]
-    selected_cols_box = st.multiselect("Select columns for box plots:", numeric_cols, default=default_box_cols, key='boxplot_select')
-    if selected_cols_box:
-        n_cols = 2
-        n_rows = (len(selected_cols_box) + 1) // 2
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, n_rows * 4))
-        if n_rows == 1 and n_cols == 1:
-            axes = [axes]
-        elif n_rows == 1:
-            axes = axes
-        else:
-            axes = axes.flatten()
-        for idx, col in enumerate(selected_cols_box):
-            if idx < len(axes):
-                bp = axes[idx].boxplot(df[col].dropna(), vert=True, patch_artist=True, boxprops=dict(facecolor='lightgreen', alpha=0.7), medianprops=dict(color='red', linewidth=2))
-                axes[idx].set_title(f'Box Plot of {col}', fontweight='bold', fontsize=12)
-                axes[idx].set_ylabel(col)
-                axes[idx].grid(alpha=0.3, axis='y')
-        for idx in range(len(selected_cols_box), len(axes)):
-            axes[idx].axis('off')
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.clf()
-    else:
-        st.info("Select at least one column to display box plots")
 
 if len(numeric_cols) > 1:
     st.subheader("🔥 Correlation Heatmap")
     corr_matrix = df[numeric_cols].corr()
     fig, ax = plt.subplots(figsize=(12, 8))
-    sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', center=0, square=True, linewidths=1, ax=ax, cbar_kws={"shrink": 0.8})
+    sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', center=0, 
+                square=True, linewidths=1, ax=ax, cbar_kws={"shrink": 0.8})
     ax.set_title('Correlation Matrix', fontsize=16, fontweight='bold')
     plt.tight_layout()
     st.pyplot(fig)
@@ -325,20 +344,25 @@ if len(numeric_cols) > 1:
 if categorical_cols:
     st.subheader("📊 Count Plots (Categorical Features)")
     selected_cat_col = st.selectbox("Select categorical column:", categorical_cols)
+    
     if selected_cat_col:
         fig, ax = plt.subplots(figsize=(10, 5))
         value_counts = df[selected_cat_col].value_counts()
+        
         if len(value_counts) > 20:
             value_counts = value_counts.head(20)
             st.warning(f"Showing top 20 categories only (out of {len(df[selected_cat_col].unique())})")
+        
         value_counts.plot(kind='bar', color='teal', ax=ax, alpha=0.7)
         ax.set_title(f'Count Plot of {selected_cat_col}', fontsize=14, fontweight='bold')
         ax.set_xlabel(selected_cat_col)
         ax.set_ylabel('Count')
         plt.xticks(rotation=45, ha='right')
         ax.grid(alpha=0.3, axis='y')
+        
         for i, v in enumerate(value_counts.values):
             ax.text(i, v + 0.5, str(v), ha='center', va='bottom')
+        
         plt.tight_layout()
         st.pyplot(fig)
         plt.clf()
@@ -349,59 +373,118 @@ st.header("🎯 Step 4: Model Selection & Training")
 col_model1, col_model2 = st.columns(2)
 
 with col_model1:
-    target_column = st.selectbox("Select Target Column:", df.columns.tolist(), help="Choose the column you want to predict")
+    target_column = st.selectbox("Select Target Column:", df.columns.tolist(), 
+                                help="Choose the column you want to predict")
 
 with col_model2:
-    model_option = st.selectbox("Select Machine Learning Model:", ["Logistic Regression", "Support Vector Machine (SVM)", "Random Forest", "K-Nearest Neighbors (KNN)"])
+    model_option = st.selectbox("Select Machine Learning Model:", 
+                               ["Random Forest (Optimized)", 
+                                "Gradient Boosting (Best Performance)",
+                                "Logistic Regression", 
+                                "Support Vector Machine (SVM)", 
+                                "K-Nearest Neighbors (KNN)"])
 
 with st.expander("⚙️ Advanced Settings"):
     test_size = st.slider("Test Set Size (%)", 10, 50, 20, 5) / 100
     random_state = st.number_input("Random State", 0, 100, 42)
-    if model_option == "Random Forest":
-        n_estimators = st.slider("Number of Trees", 10, 200, 100, 10)
-        max_depth = st.slider("Max Depth", 1, 20, 10)
+    
+    if "Random Forest" in model_option:
+        n_estimators = st.slider("Number of Trees", 50, 300, 150, 50)
+        max_depth = st.slider("Max Depth", 5, 30, 15, 5)
+    elif "Gradient Boosting" in model_option:
+        n_estimators_gb = st.slider("Number of Estimators", 50, 300, 100, 50)
+        learning_rate = st.slider("Learning Rate", 0.01, 0.3, 0.1, 0.01)
     elif model_option == "K-Nearest Neighbors (KNN)":
-        n_neighbors = st.slider("Number of Neighbors", 1, 20, 5)
+        n_neighbors = st.slider("Number of Neighbors", 3, 15, 7, 2)
     elif model_option == "Support Vector Machine (SVM)":
         kernel = st.selectbox("Kernel", ["rbf", "linear", "poly"])
+        C_param = st.slider("Regularization (C)", 0.1, 10.0, 1.0, 0.1)
 
 if st.button("🚀 Train Model", type="primary"):
     try:
         with st.spinner('🔄 Preparing data and training model...'):
             X = df.drop(columns=[target_column]).copy()
             y = df[target_column].copy()
+            
             categorical_features = X.select_dtypes(include=['object']).columns
+            
             if len(categorical_features) > 0:
                 st.info(f"🔄 Encoding categorical features: {', '.join(categorical_features)}")
+                label_encoders = {}
                 for col in categorical_features:
                     le = LabelEncoder()
                     X[col] = le.fit_transform(X[col].astype(str))
+                    label_encoders[col] = le
+            
             if y.dtype == 'object':
                 le_target = LabelEncoder()
                 y_encoded = le_target.fit_transform(y)
                 st.info(f"🎯 Target classes: {', '.join(map(str, le_target.classes_))}")
             else:
                 y_encoded = y
-            X_train, X_test, y_train, y_test = train_test_split(X, y_encoded, test_size=test_size, random_state=random_state, stratify=y_encoded)
+            
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y_encoded, test_size=test_size, random_state=random_state, stratify=y_encoded
+            )
+            
             st.info(f"📊 Training set: {len(X_train)} samples | Test set: {len(X_test)} samples")
+            
             scaler = StandardScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)
-            if model_option == "Logistic Regression":
-                model = LogisticRegression(max_iter=1000, random_state=random_state)
+            
+            if "Random Forest" in model_option:
+                model = RandomForestClassifier(
+                    n_estimators=n_estimators,
+                    max_depth=max_depth,
+                    min_samples_split=5,
+                    min_samples_leaf=2,
+                    random_state=random_state,
+                    n_jobs=-1
+                )
+            elif "Gradient Boosting" in model_option:
+                model = GradientBoostingClassifier(
+                    n_estimators=n_estimators_gb,
+                    learning_rate=learning_rate,
+                    max_depth=5,
+                    min_samples_split=5,
+                    random_state=random_state
+                )
+            elif model_option == "Logistic Regression":
+                model = LogisticRegression(
+                    max_iter=2000,
+                    random_state=random_state,
+                    C=1.0,
+                    solver='lbfgs'
+                )
             elif model_option == "Support Vector Machine (SVM)":
-                model = SVC(kernel=kernel, random_state=random_state, probability=True)
-            elif model_option == "Random Forest":
-                model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=random_state)
+                model = SVC(
+                    kernel=kernel,
+                    C=C_param,
+                    random_state=random_state,
+                    probability=True,
+                    gamma='scale'
+                )
             elif model_option == "K-Nearest Neighbors (KNN)":
-                model = KNeighborsClassifier(n_neighbors=n_neighbors)
+                model = KNeighborsClassifier(
+                    n_neighbors=n_neighbors,
+                    weights='distance',
+                    metric='minkowski'
+                )
+            
             model.fit(X_train_scaled, y_train)
             y_pred = model.predict(X_test_scaled)
+            
+            cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5, scoring='accuracy')
+        
         st.success("✅ Model trained successfully!")
+        
         st.markdown("---")
         st.header("📊 Step 5: Model Evaluation Results")
+        
         accuracy = accuracy_score(y_test, y_pred)
         unique_classes = len(np.unique(y_test))
+        
         if unique_classes == 2:
             precision = precision_score(y_test, y_pred, zero_division=0)
             recall = recall_score(y_test, y_pred, zero_division=0)
@@ -410,8 +493,11 @@ if st.button("🚀 Train Model", type="primary"):
             precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
             recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
             f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
+        
         st.subheader("📈 Performance Metrics")
-        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        
+        col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+        
         with col_m1:
             st.metric("Accuracy", f"{accuracy:.2%}", help="Overall correctness of predictions")
         with col_m2:
@@ -420,54 +506,44 @@ if st.button("🚀 Train Model", type="primary"):
             st.metric("Recall", f"{recall:.2%}", help="Coverage of actual positives")
         with col_m4:
             st.metric("F1-Score", f"{f1:.2%}", help="Harmonic mean of precision and recall")
-        if accuracy > 0.9:
+        with col_m5:
+            st.metric("CV Score", f"{cv_scores.mean():.2%}", 
+                     help=f"5-Fold Cross-Validation (±{cv_scores.std():.2%})")
+        
+        if accuracy > 0.85:
             st.success("🎉 Excellent model performance!")
-        elif accuracy > 0.8:
+        elif accuracy > 0.75:
             st.info("👍 Good model performance!")
-        elif accuracy > 0.7:
-            st.warning("⚠️ Moderate model performance. Consider tuning parameters.")
+        elif accuracy > 0.65:
+            st.warning("⚠️ Moderate model performance. Consider trying Gradient Boosting.")
         else:
-            st.error("❌ Poor model performance. Try a different model or feature engineering.")
+            st.error("❌ Poor model performance. Try feature engineering or a different model.")
+        
         st.subheader("📋 Detailed Classification Report")
         report = classification_report(y_test, y_pred, output_dict=True, zero_division=0)
         report_df = pd.DataFrame(report).transpose()
-        st.dataframe(report_df, use_container_width=True)
+        st.dataframe(report_df.style.highlight_max(axis=0, color='lightgreen'), use_container_width=True)
+        
         st.subheader("🔍 Confusion Matrix")
         cm = confusion_matrix(y_test, y_pred)
+        
         fig, ax = plt.subplots(figsize=(8, 6))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax, cbar_kws={"shrink": 0.8}, linewidths=2, linecolor='white')
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax, 
+                   cbar_kws={"shrink": 0.8}, linewidths=2, linecolor='white')
         ax.set_title('Confusion Matrix', fontsize=16, fontweight='bold')
         ax.set_ylabel('Actual', fontsize=12)
         ax.set_xlabel('Predicted', fontsize=12)
         plt.tight_layout()
         st.pyplot(fig)
         plt.clf()
+        
         if hasattr(model, 'feature_importances_'):
             st.subheader("🎯 Feature Importance")
             feature_names = X.columns
             importances = model.feature_importances_
-            feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances}).sort_values('Importance', ascending=False)
-            fig, ax = plt.subplots(figsize=(10, 6))
-            top_features = feature_importance_df.head(10)
-            ax.barh(top_features['Feature'], top_features['Importance'], color='purple', alpha=0.7)
-            ax.set_title('Top 10 Feature Importances', fontsize=14, fontweight='bold')
-            ax.set_xlabel('Importance Score')
-            ax.invert_yaxis()
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.clf()
-            with st.expander("📊 View All Feature Importances"):
-                st.dataframe(feature_importance_df, use_container_width=True)
-    except Exception as e:
-        st.error(f"❌ Error during training: {e}")
-        import traceback
-        st.code(traceback.format_exc())
-
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: gray; padding: 20px;'>
-<p style='font-size: 16px;'><strong>🤖 ML Model Trainer | Built with Streamlit</strong></p>
-<p>Try different datasets and models to see how they perform!</p>
-<p style='font-size: 12px;'>Ready to deploy on Streamlit Cloud 🚀</p>
-</div>
-""", unsafe_allow_html=True)
+            feature_importance_df = pd.DataFrame({
+                'Feature': feature_names,
+                'Importance': importances
+            }).sort_values('Importance', ascending=False)
+            
+            fig, ax = plt.subplots(fig
