@@ -546,5 +546,6 @@ if st.button("🚀 Train Model", type="primary"):
                 'Importance': importances
             }).sort_values('Importance', ascending=False)
             
-            fig, ax = plt.subplots(fig
+            fig, ax = plt.subplots(fig)
+
 
