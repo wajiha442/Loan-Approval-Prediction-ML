@@ -546,6 +546,29 @@ if st.button("🚀 Train Model", type="primary"):
                 'Importance': importances
             }).sort_values('Importance', ascending=False)
             
-            fig, ax = plt.subplots(fig)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            top_features = feature_importance_df.head(10)
+            ax.barh(top_features['Feature'], top_features['Importance'], color='purple', alpha=0.7)
+            ax.set_title('Top 10 Feature Importances', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Importance Score')
+            ax.invert_yaxis()
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.clf()
+            
+            with st.expander("📊 View All Feature Importances"):
+                st.dataframe(feature_importance_df, use_container_width=True)
+    
+    except Exception as e:
+        st.error(f"❌ Error during training: {e}")
+        import traceback
+        st.code(traceback.format_exc())
 
-
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: gray; padding: 20px;'>
+<p style='font-size: 16px;'><strong>🤖 ML Model Trainer | Built with Streamlit</strong></p>
+<p>Try different datasets and models to see how they perform!</p>
+<p style='font-size: 12px;'>Ready to deploy on Streamlit Cloud 🚀</p>
+</div>
+""", unsafe_allow_html=True)
