@@ -230,12 +230,36 @@ st.header("🎯 Step 2: Model Training")
 col1, col2 = st.columns(2)
 
 with col1:
+    # Get categorical columns only (good target candidates)
+    categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    
+    # Show recommended columns
+    all_cols = df.columns.tolist()
+    
     target_col = st.selectbox(
         "Select Target Column:", 
-        df.columns.tolist(), 
-        index=len(df.columns)-1,
-        help="Select the column you want to predict"
+        all_cols, 
+        index=len(all_cols)-1,
+        help="⚠️ SELECT A CATEGORICAL COLUMN (like Loan_Status, Churn, Is_Fraud, etc.)"
     )
+    
+    # Validation warning
+    unique_count = df[target_col].nunique()
+    
+    if unique_count > 50:
+        st.error(f"❌ '{target_col}' has {unique_count} unique values! This is NOT suitable for classification.")
+        st.error(f"✅ **SELECT ONE OF THESE INSTEAD**: {', '.join(categorical_cols)}")
+        st.stop()
+    elif unique_count < 2:
+        st.error(f"❌ '{target_col}' has only {unique_count} unique value!")
+        st.stop()
+    else:
+        st.success(f"✅ '{target_col}' is valid! ({unique_count} classes)")
+        
+        # Show the classes
+        classes = df[target_col].unique()
+        st.caption(f"Classes: {', '.join(map(str, classes[:5]))}" + (f" ... and {len(classes)-5} more" if len(classes) > 5 else ""))
 
 with col2:
     model_choice = st.selectbox(
