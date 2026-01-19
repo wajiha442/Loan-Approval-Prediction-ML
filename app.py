@@ -269,21 +269,27 @@ if st.button("🚀 Train Model", type="primary", use_container_width=True):
             class_counts = y.value_counts()
             st.info(f"📊 **Class Distribution**: {dict(class_counts)}")
             
-            # Encode categorical features
+            # Encode categorical features in X
+            X_encoded = X.copy()
             le_dict = {}
-            for col in X.select_dtypes(include=['object']).columns:
-                le = LabelEncoder()
-                X[col] = le.fit_transform(X[col].astype(str))
-                le_dict[col] = le
+            
+            for col in X_encoded.columns:
+                if X_encoded[col].dtype == 'object' or X_encoded[col].dtype.name == 'category':
+                    le = LabelEncoder()
+                    X_encoded[col] = le.fit_transform(X_encoded[col].astype(str))
+                    le_dict[col] = le
             
             # Encode target if categorical
-            if y.dtype == 'object':
+            if y.dtype == 'object' or y.dtype.name == 'category':
                 le_target = LabelEncoder()
-                y_encoded = le_target.fit_transform(y)
+                y_encoded = le_target.fit_transform(y.astype(str))
                 target_classes = le_target.classes_
             else:
                 y_encoded = y.values
                 target_classes = np.unique(y)
+            
+            # Use encoded X
+            X = X_encoded
             
             # Split data
             X_train, X_test, y_train, y_test = train_test_split(
