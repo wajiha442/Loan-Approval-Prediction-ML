@@ -1,4 +1,4 @@
- import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -547,3 +547,4 @@ if st.button("🚀 Train Model", type="primary"):
             }).sort_values('Importance', ascending=False)
             
             fig, ax = plt.subplots(fig
+
