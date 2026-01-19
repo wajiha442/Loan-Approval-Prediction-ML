@@ -120,6 +120,15 @@ col1, col2 = st.columns(2)
 
 with col1:
     target = st.selectbox("Target Column:", df.columns.tolist(), index=len(df.columns)-1)
+    
+    # Show column info
+    if target:
+        unique_vals = df[target].nunique()
+        dtype = df[target].dtype
+        st.caption(f"Type: {dtype} | Unique values: {unique_vals}")
+        
+        if unique_vals > 20:
+            st.warning(f"⚠️ This column has {unique_vals} unique values. Consider selecting a categorical column (2-10 unique values)")
 
 with col2:
     model_choice = st.selectbox("Model:", 
@@ -127,20 +136,57 @@ with col2:
                                 "Random Forest", 
                                 "Logistic Regression"])
 
+# Option to convert numeric to categories
+if df[target].dtype in ['int64', 'float64'] and df[target].nunique() > 10:
+    st.warning("🔄 Numeric column detected! Converting to categories...")
+    convert_option = st.radio("Convert to:", ["Low/Medium/High (3 groups)", "Quartiles (4 groups)", "Don't convert (use as-is)"])
+    
+    if convert_option == "Low/Medium/High (3 groups)":
+        df[target + '_Category'] = pd.cut(df[target], bins=3, labels=['Low', 'Medium', 'High'])
+        target = target + '_Category'
+        st.success(f"✅ Created new column: {target}")
+    elif convert_option == "Quartiles (4 groups)":
+        df[target + '_Category'] = pd.qcut(df[target], q=4, labels=['Q1', 'Q2', 'Q3', 'Q4'], duplicates='drop')
+        target = target + '_Category'
+        st.success(f"✅ Created new column: {target}")
+
 if st.button("🚀 Train Model", type="primary"):
     try:
         with st.spinner('Training...'):
             X = df.drop(columns=[target]).copy()
             y = df[target].copy()
             
+            # Check target column
+            unique_classes = y.nunique()
+            if unique_classes < 2:
+                st.error(f"❌ Target column '{target}' has only {unique_classes} unique value! Please select a different target column.")
+                st.stop()
+            
+            # Show class distribution
+            class_dist = y.value_counts()
+            st.info(f"📊 Class Distribution: {dict(class_dist)}")
+            
+            # Check if any class has too few samples
+            min_class_count = class_dist.min()
+            if min_class_count < 2:
+                st.error(f"❌ One class has only {min_class_count} sample(s). Need at least 2 samples per class!")
+                st.stop()
+            
             # Encode categoricals
             for col in X.select_dtypes(include=['object']).columns:
                 X[col] = LabelEncoder().fit_transform(X[col].astype(str))
             
             if y.dtype == 'object':
-                y = LabelEncoder().fit_transform(y)
+                le_y = LabelEncoder()
+                y = le_y.fit_transform(y)
+                st.info(f"🎯 Target classes: {', '.join(le_y.classes_)}")
             
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+            # Use stratify only if we have enough samples
+            use_stratify = min_class_count >= 2
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=0.2, random_state=42, 
+                stratify=y if use_stratify else None
+            )
             
             scaler = StandardScaler()
             X_train = scaler.fit_transform(X_train)
